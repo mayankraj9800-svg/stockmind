@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: stockmind-backend
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: ALLOWED_ORIGINS
+        value: https://your-app.netlify.app
+      - key: FINNHUB_BASE_URL
+        value: https://finnhub.io/api/v1
+      - key: FINNHUB_TIMEOUT_MS
+        value: 8000
+      - key: FINNHUB_RETRIES
+        value: 2
