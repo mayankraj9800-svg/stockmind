@@ -693,7 +693,7 @@ html, body {
     </div>
 
     <!-- STEP 1: Google Login -->
-    <div class="setup-card" id="loginCard">
+    <div class="setup-card" id="loginCard" style="display:none">
       <div style="text-align:center;padding:12px 0 20px">
         <div style="font-size:13px;color:var(--tx2);margin-bottom:20px;line-height:1.7">
           Your API keys are stored in <b>your own Google account</b>.<br>
@@ -739,10 +739,10 @@ html, body {
     </div>
 
     <!-- Loading state -->
-    <div class="setup-card" id="loadingCard" style="display:none">
+    <div class="setup-card" id="loadingCard">
       <div style="text-align:center;padding:24px 0;color:var(--tx2);font-size:12px">
         <div class="bs-dot pulse" style="margin:0 auto 12px"></div>
-        <span id="loadingText">Loading your account…</span>
+        <span id="loadingText">Checking your account…</span>
       </div>
     </div>
   </div>
@@ -1114,6 +1114,8 @@ html, body {
             <div class="fr2"><div class="ff"><span class="fl">P/E Ratio</span><input class="fi" id="fpe" type="number" placeholder="e.g. 24.5"/></div><div class="ff"><span class="fl">P/B Ratio</span><input class="fi" id="fpb" type="number" placeholder="e.g. 3.2"/></div></div>
             <div class="fr2"><div class="ff"><span class="fl">ROE %</span><input class="fi" id="froe" type="number" placeholder="e.g. 18.5"/></div><div class="ff"><span class="fl">D/E Ratio</span><input class="fi" id="fde" type="number" placeholder="e.g. 0.45"/></div></div>
             <div class="fr2"><div class="ff"><span class="fl">EPS</span><input class="fi" id="feps" type="number" placeholder="e.g. 6.11"/></div><div class="ff"><span class="fl">Revenue Growth %</span><input class="fi" id="frg" type="number" placeholder="e.g. 12.4"/></div></div>
+            <div class="fr2"><div class="ff"><span class="fl">Forward P/E</span><input class="fi" id="ffpe" type="number" placeholder="e.g. 22.3"/></div><div class="ff"><span class="fl">PEG Ratio</span><input class="fi" id="fpeg" type="number" placeholder="e.g. 1.8"/></div></div>
+            <div class="fr2"><div class="ff"><span class="fl">Analyst Target $</span><input class="fi" id="ftp" type="number" placeholder="e.g. 195.00"/></div><div class="ff"><span class="fl">Earnings Growth %</span><input class="fi" id="feg" type="number" placeholder="e.g. 14.2"/></div></div>
             <div class="ff"><span class="fl">Paste Raw Financial Data (optional)</span><textarea class="ft" id="fraw" placeholder="Paste from Screener.in, annual report etc. — AI reads automatically" style="min-height:60px"></textarea></div>
           </div>
         </div>
@@ -1314,6 +1316,18 @@ const ApiClient = {
       return { ok: false, latencyMs: Date.now() - t0, message: e.message };
     }
   },
+
+  // Fetch daily candles for RSI/MACD/MA calculations (best-effort, non-blocking)
+  async candles(symbol, days = 220) {
+    try {
+      const to   = Math.floor(Date.now() / 1000);
+      const from = to - days * 86400;
+      return await this._get(`/candles/${encodeURIComponent(symbol)}?from=${from}&to=${to}&resolution=D`);
+    } catch (e) {
+      console.warn(`[ApiClient] Candles failed for ${symbol}:`, e.message);
+      return null;
+    }
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1342,12 +1356,31 @@ const APP = {
     if (window.FB) {
       this.startAuthFlow();
     } else {
-      window.addEventListener('firebase-ready', () => this.startAuthFlow(), { once: true });
+      // Safety timeout: if Firebase hasn't loaded in 8s, show login anyway
+      const fbTimeout = setTimeout(() => {
+        if (!window.FB) {
+          document.getElementById('loginCard').style.display   = 'block';
+          document.getElementById('loadingCard').style.display = 'none';
+          const errEl = document.getElementById('loginErr');
+          errEl.textContent   = 'Firebase loaded slowly — please refresh if sign-in fails.';
+          errEl.style.display = 'block';
+        }
+      }, 8000);
+      window.addEventListener('firebase-ready', () => {
+        clearTimeout(fbTimeout);
+        this.startAuthFlow();
+      }, { once: true });
     }
   },
 
   // ── FIREBASE AUTH FLOW ────────────────────────────────────────────────────
   startAuthFlow() {
+    // Show loading immediately so user never sees a flash of the sign-in button
+    document.getElementById('loginCard').style.display   = 'none';
+    document.getElementById('keysCard').style.display    = 'none';
+    document.getElementById('loadingCard').style.display = 'block';
+    document.getElementById('loadingText').textContent   = 'Checking your account…';
+
     const { auth, onAuthStateChanged } = window.FB;
     onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -1369,31 +1402,71 @@ const APP = {
 
   async signInWithGoogle() {
     const { auth, provider, signInWithPopup } = window.FB;
-    const btn = document.getElementById('googleSignInBtn');
+    const btn   = document.getElementById('googleSignInBtn');
     const errEl = document.getElementById('loginErr');
     btn.disabled = true;
     btn.textContent = 'Signing in…';
     errEl.style.display = 'none';
+
+    // Safety: always re-enable button after 15s no matter what
+    const safetyTimer = setTimeout(() => {
+      btn.disabled    = false;
+      btn.innerHTML   = '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg> Sign in with Google';
+      if (!errEl.style.display || errEl.style.display === 'none') {
+        errEl.textContent   = 'Taking too long? Try clicking Sign in again.';
+        errEl.style.display = 'block';
+      }
+    }, 15000);
+
     try {
       await signInWithPopup(auth, provider);
+      clearTimeout(safetyTimer);
       // onAuthStateChanged fires automatically
     } catch (e) {
-      btn.disabled = false;
+      clearTimeout(safetyTimer);
+      btn.disabled  = false;
       btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg> Sign in with Google';
-      errEl.textContent   = e.message || 'Sign-in failed. Try again.';
+
+      // User-friendly error messages based on error code
+      let msg = 'Sign-in failed. Try again.';
+      if (e.code === 'auth/popup-blocked')        msg = 'Popup was blocked. Please allow popups for this site and try again.';
+      else if (e.code === 'auth/popup-closed-by-user') msg = 'Sign-in window was closed. Click the button to try again.';
+      else if (e.code === 'auth/cancelled-popup-request') msg = 'Sign-in was cancelled. Click the button to try again.';
+      else if (e.code === 'auth/network-request-failed') msg = 'Network error. Check your connection and try again.';
+      else if (e.message) msg = e.message;
+
+      errEl.textContent   = msg;
       errEl.style.display = 'block';
     }
   },
 
   async onUserSignedIn(user) {
-    // Show loading
+    // Show loading — hide everything else
     document.getElementById('loginCard').style.display    = 'none';
     document.getElementById('keysCard').style.display     = 'none';
     document.getElementById('loadingCard').style.display  = 'block';
     document.getElementById('loadingText').textContent    = 'Loading your account…';
 
+    // Safety: if Firestore hangs for 10s, fall through to key entry screen
+    let firestoreTimedOut = false;
+    const firestoreTimeout = setTimeout(() => {
+      firestoreTimedOut = true;
+      console.warn('Firestore load timed out — showing key entry screen');
+      document.getElementById('loadingCard').style.display = 'none';
+      document.getElementById('keysCard').style.display    = 'block';
+      document.getElementById('userEmail').textContent     = user.email;
+      document.getElementById('launchBtn').onclick         = () => this.handleSetup();
+      document.getElementById('ki').addEventListener('keypress',  e => { if (e.key === 'Enter') this.handleSetup(); }, { once: true });
+      document.getElementById('fki').addEventListener('keypress', e => { if (e.key === 'Enter') this.handleSetup(); }, { once: true });
+      const errBox = document.getElementById('errBox');
+      errBox.textContent   = 'Account loaded slowly — enter your keys to continue.';
+      errBox.style.display = 'block';
+    }, 10000);
+
     // Load user data from Firestore
     const userData = await this.loadUserData(user.uid);
+    clearTimeout(firestoreTimeout);
+    if (firestoreTimedOut) return; // timeout already handled UI
 
     if (userData?.finnhubKey && userData?.groqKey) {
       // Keys exist — set them and launch straight into the app
@@ -1408,8 +1481,8 @@ const APP = {
       document.getElementById('keysCard').style.display    = 'block';
       document.getElementById('userEmail').textContent     = user.email;
       document.getElementById('launchBtn').onclick         = () => this.handleSetup();
-      document.getElementById('ki').addEventListener('keypress',  e => { if (e.key === 'Enter') this.handleSetup(); });
-      document.getElementById('fki').addEventListener('keypress', e => { if (e.key === 'Enter') this.handleSetup(); });
+      document.getElementById('ki').addEventListener('keypress',  e => { if (e.key === 'Enter') this.handleSetup(); }, { once: true });
+      document.getElementById('fki').addEventListener('keypress', e => { if (e.key === 'Enter') this.handleSetup(); }, { once: true });
     }
   },
 
@@ -1441,15 +1514,15 @@ const APP = {
 
   // ── FIRESTORE: save analysis to history ──────────────────────────────────
   async saveAnalysis(symbol, result) {
-    const { db, doc, updateDoc, arrayUnion, serverTimestamp } = window.FB;
+    const { db, doc, setDoc, arrayUnion, serverTimestamp } = window.FB;
     try {
-      await updateDoc(doc(db, 'users', this.currentUser.uid), {
+      await setDoc(doc(db, 'users', this.currentUser.uid), {
         analysisHistory: arrayUnion({
           symbol,
           result: result.slice(0, 1000),
           timestamp: new Date().toISOString(),
         }),
-      });
+      }, { merge: true });
     } catch (e) { /* silent */ }
   },
 
@@ -1473,15 +1546,30 @@ const APP = {
     btn.textContent = 'Validating…';
     errBox.style.display = 'none';
 
-    // Test the Finnhub key before saving
+    // Test the Finnhub key — but don't block launch if backend is cold-starting
     this.finnhubKey = finnhubVal;
     this.groqKey    = groqVal;
     const health = await ApiClient.health();
     if (!health.ok) {
-      this.finnhubKey     = '';
-      btn.disabled        = false;
-      btn.textContent     = 'Save & Launch →';
-      errBox.textContent  = `Finnhub key invalid: ${health.message}`;
+      // If it looks like a cold start (timeout/network), save keys and launch anyway
+      const isColdStart = health.message && (
+        health.message.includes('fetch') ||
+        health.message.includes('network') ||
+        health.message.includes('timeout') ||
+        health.message.includes('500') ||
+        health.message.includes('503')
+      );
+      if (isColdStart) {
+        // Backend may be waking up — save keys and launch, it will retry
+        await this.saveUserData({ finnhubKey: finnhubVal, groqKey: groqVal });
+        await this.launchApp();
+        return;
+      }
+      // Looks like a real key error
+      this.finnhubKey      = '';
+      btn.disabled         = false;
+      btn.textContent      = 'Save & Launch →';
+      errBox.textContent   = `Could not validate Finnhub key: ${health.message}`;
       errBox.style.display = 'block';
       return;
     }
@@ -1527,8 +1615,8 @@ const APP = {
 
   // ── SIGN OUT ──────────────────────────────────────────────────────────────
   async signOut() {
-    const { auth, signOut } = window.FB;
-    await signOut(auth);
+    const { auth, signOut: fbSignOut } = window.FB;
+    await fbSignOut(auth);
     location.reload();
   },
 
@@ -1619,9 +1707,9 @@ const APP = {
   async clearHistory() {
     if (!this.currentUser) return;
     if (!confirm('Clear all analysis history? This cannot be undone.')) return;
-    const { db, doc, updateDoc } = window.FB;
+    const { db, doc, setDoc } = window.FB;
     try {
-      await updateDoc(doc(db, 'users', this.currentUser.uid), { analysisHistory: [] });
+      await setDoc(doc(db, 'users', this.currentUser.uid), { analysisHistory: [] }, { merge: true });
       this.toast('✅ History cleared');
       this.loadHistory();
     } catch(e) {
@@ -1649,9 +1737,8 @@ const APP = {
 
   // ── EVENT LISTENERS ──────────────────────────────────────────────────────
   attachEventListeners() {
-    // Setup
-    document.getElementById('launchBtn')?.addEventListener('click', () => this.handleSetup());
-    document.getElementById('ki')?.addEventListener('keypress', e => { if (e.key === 'Enter') this.handleSetup(); });
+    // Note: launchBtn, ki (Groq key), and fki (Finnhub key) listeners are
+    // attached dynamically in onUserSignedIn after the keysCard is shown.
 
     // Tab switching
     document.querySelectorAll('[data-tab]').forEach(tab => {
@@ -1867,13 +1954,26 @@ const APP = {
     document.getElementById('groqStatus').textContent = 'thinking…';
     document.getElementById('groqStatus').style.color = 'var(--am)';
 
-    const prompt = `You are a concise stock analyst. Analyse ${symbol}:
-- Current Price: $${quote.c?.toFixed(2)}
-- Change: ${quote.d?.toFixed(2)} (${quote.dp?.toFixed(2)}%)
-- High: $${quote.h?.toFixed(2)} | Low: $${quote.l?.toFixed(2)}
-- Open: $${quote.o?.toFixed(2)} | Prev Close: $${quote.pc?.toFixed(2)}
+    // Dynamic confidence + risk for chart panel
+    const chartConf = this.calculateConfidence({ quote, profile: null, metrics: null, news: null });
+    const chartRisk = this.calculateRisk(null, quote);
+    const chartTech = this.computeTechnicals(null, quote);
 
-Give a 3-line analysis and a clear BUY / HOLD / SELL verdict with confidence %.`;
+    const prompt = `You are StockMind AI. Analyse ${symbol} using ONLY the verified live data below. Respond in structured format.
+
+VERIFIED LIVE DATA:
+Price: $${quote.c?.toFixed(2)} | Change: ${quote.dp >= 0 ? '+' : ''}${quote.dp?.toFixed(2)}% (${quote.d >= 0 ? '+' : ''}$${quote.d?.toFixed(2)})
+High: $${quote.h?.toFixed(2)} | Low: $${quote.l?.toFixed(2)} | Open: $${quote.o?.toFixed(2)} | Prev Close: $${quote.pc?.toFixed(2)}
+Intraday trend: ${chartTech.rsiNote || 'N/A'} | ${chartTech.macdNote || ''} | ${chartTech.maNote || ''} | Risk: ${chartRisk.level}
+
+FORMAT:
+📊 SUMMARY: [1 sentence on price action]
+⚡ TECHNICALS: [momentum, day range context, any RSI/MACD signals if available]
+🔴 RISK: [${chartRisk.level} — ${chartRisk.factors.join(', ') || 'no elevated signals from price data alone'}]
+🎯 VERDICT: [BUY/HOLD/SELL — note: based on intraday price data only, no fundamentals available]
+⚠ Confidence: ${chartConf.score}% (price only) | Not financial advice
+
+Max 100 words.`;
 
     const result = await this.callGroqAI(prompt);
     if (!result) {
@@ -2083,27 +2183,70 @@ Give a 3-line analysis and a clear BUY / HOLD / SELL verdict with confidence %.`
     const de  = document.getElementById('fde').value   || 'Not provided';
     const eps = document.getElementById('feps').value  || 'Not provided';
     const rg  = document.getElementById('frg').value   || 'Not provided';
+    const fpe = document.getElementById('ffpe').value  || 'Not provided';
+    const peg = document.getElementById('fpeg').value  || 'Not provided';
+    const tp  = document.getElementById('ftp').value   || 'Not provided';
+    const eg  = document.getElementById('feg').value   || 'Not provided';
     const raw = document.getElementById('fraw').value  || 'None';
     const ctx = document.getElementById('fctx').value  || 'General analysis';
     const hor = document.getElementById('fhor').value  || 'Any';
     const sty = document.getElementById('fsty').value  || 'Any';
     const rsk = document.getElementById('frsk').value  || 'Any';
 
-    const prompt = `You are a professional stock analyst. Analyse ${ticker} based on:
-- Live Price: $${quote.c?.toFixed(2)} (from Finnhub via secure backend)
-- Change: ${quote.d?.toFixed(2)} (${quote.dp?.toFixed(2)}%)
-- High: $${quote.h?.toFixed(2)} | Low: $${quote.l?.toFixed(2)} | Open: $${quote.o?.toFixed(2)}
-- P/E: ${pe} | P/B: ${pb} | ROE: ${roe}% | D/E: ${de} | EPS: ${eps} | Revenue Growth: ${rg}%
-- Raw Data: ${raw}
-- User Context: ${ctx}
-- Investment Horizon: ${hor} | Style: ${sty} | Risk Appetite: ${rsk}
+    // Dynamic confidence and risk for panel analysis
+    const panelMockData = { quote, profile: null, metrics: null, news: null };
+    const panelConf = this.calculateConfidence(panelMockData);
+    const panelRisk = this.calculateRisk({ peTTM: pe, pbAnnual: pb, roeTTM: roe, beta: '1.0' }, quote);
+    const panelTech = this.computeTechnicals(null, quote);
 
-Provide a clear BUY / SELL / HOLD verdict with:
-1. Summary (2-3 sentences)
-2. Key Strengths (3 points)
-3. Key Risks (3 points)
-4. Final Verdict with confidence level (e.g. BUY — 78% confidence)
-Keep it concise and actionable.`;
+    const hasVerifiedMetrics = pe !== 'Not provided' && rg !== 'Not provided';
+    const verdictInstruction = hasVerifiedMetrics
+      ? 'Provide BUY / HOLD / SELL verdict with reasoning.'
+      : 'DO NOT give a BUY/HOLD/SELL verdict — user-supplied metrics only, cannot verify. State analysis is indicative only.';
+
+    // Analyst upside if target provided
+    const tpUpside = tp !== 'Not provided' && quote.c
+      ? `(${((parseFloat(tp) - quote.c) / quote.c * 100).toFixed(1)}% vs current)`
+      : '';
+
+    const prompt = `You are StockMind AI — institutional-grade analysis engine. Respond in the structured Bloomberg format below. No filler, no chatbot language, no disclaimers beyond the confidence line.
+
+VERIFIED LIVE DATA: ${ticker}
+Price: $${quote.c?.toFixed(2)} | Change: ${quote.dp >= 0 ? '+' : ''}${quote.dp?.toFixed(2)}% | High: $${quote.h?.toFixed(2)} | Low: $${quote.l?.toFixed(2)} | Open: $${quote.o?.toFixed(2)}
+Risk Level: ${panelRisk.level} | Confidence: ${panelConf.score}% (live price confirmed)
+Intraday: ${panelTech.rsiNote || 'Neutral momentum'}
+
+USER-PROVIDED FINANCIALS (unverified — label as "user-reported"):
+P/E(TTM): ${pe} | Fwd P/E: ${fpe} | PEG: ${peg} | P/B: ${pb} | ROE: ${roe}% | D/E: ${de} | EPS: ${eps}
+Rev Growth: ${rg}% | Earnings Growth: ${eg}% | Analyst Target: $${tp} ${tpUpside}
+Notes: ${raw}
+Investment Context: ${ctx} | Horizon: ${hor} | Style: ${sty} | Risk Appetite: ${rsk}
+
+RESPOND IN THIS EXACT FORMAT:
+📊 SUMMARY
+[2 sentences on what this stock is and what today's price action reveals]
+
+📈 VALUATION
+[P/E vs Fwd P/E trend, PEG interpretation, analyst target upside/downside — label all as "user-reported, unverified". If not provided, state "Insufficient data".]
+
+⚡ TECHNICALS
+[Intraday momentum, day range position, open vs close context — only from verified live data above]
+
+🔴 RISK
+[${panelRisk.level} risk — note top factors from provided data]
+
+🌐 MARKET CONTEXT
+[1 sentence of relevant sector/macro context based on ${document.getElementById('fsec')?.value || 'general market'}]
+
+💬 SENTIMENT
+[Neutral — no news data in this analysis mode. Note if user context suggests positive or negative outlook.]
+
+🎯 VERDICT
+${verdictInstruction}
+
+⚠ Confidence: ${panelConf.score}% | Live price verified · Financials user-reported · Not financial advice
+
+Max 250 words. No invented data. If a metric is "Not provided", do not estimate it.`;
 
     const result = await this.callGroqAI(prompt);
     btn.disabled = false; btn.textContent = '🔍 Fetch Live Data & Predict BUY / SELL / HOLD';
@@ -2123,17 +2266,21 @@ Keep it concise and actionable.`;
     document.getElementById('fco').value  = 'Apple Inc.';
     document.getElementById('fsec').value = 'Technology';
     document.getElementById('fpe').value  = '28.5';
+    document.getElementById('ffpe').value = '25.2';
+    document.getElementById('fpeg').value = '2.1';
     document.getElementById('fpb').value  = '48.2';
     document.getElementById('froe').value = '87.5';
     document.getElementById('fde').value  = '1.8';
     document.getElementById('feps').value = '6.05';
     document.getElementById('frg').value  = '5.2';
+    document.getElementById('feg').value  = '11.4';
+    document.getElementById('ftp').value  = '210.00';
     document.getElementById('fctx').value = 'Is AAPL a good long-term hold?';
     this.fetchLiveData();
   },
 
   clearFA() {
-    ['ftk','fco','fpe','fpb','froe','fde','feps','frg','fraw','fctx'].forEach(id => {
+    ['ftk','fco','fpe','fpb','froe','fde','feps','frg','ffpe','fpeg','ftp','feg','fraw','fctx'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
     document.getElementById('faLiveData').style.display = 'none';
@@ -2163,11 +2310,30 @@ Keep it concise and actionable.`;
     const d2 = document.getElementById('cs2data').value || 'None';
     const d3 = document.getElementById('cs3data').value || 'None';
 
-    let prompt = `Compare these stocks based on live data (Finnhub via secure backend):\n\n`;
-    prompt += `${s1}: Price $${q1.c?.toFixed(2)}, Change ${q1.dp?.toFixed(2)}%\nNotes: ${d1}\n\n`;
-    prompt += `${s2}: Price $${q2.c?.toFixed(2)}, Change ${q2.dp?.toFixed(2)}%\nNotes: ${d2}`;
-    if (q3) prompt += `\n\n${s3}: Price $${q3.c?.toFixed(2)}, Change ${q3.dp?.toFixed(2)}%\nNotes: ${d3}`;
-    prompt += `\n\nProvide:\n1. Individual assessment (2-3 sentences each)\n2. Relative strengths\n3. Which is the best pick now and why\n4. Overall recommendation`;
+    let prompt = `You are StockMind AI — institutional-grade analysis engine. Compare these stocks using ONLY the verified live data below. Do not fabricate metrics not present here.
+
+LIVE DATA (verified via Finnhub backend):
+${s1}: $${q1.c?.toFixed(2)} (${q1.dp >= 0 ? '+' : ''}${q1.dp?.toFixed(2)}%) | Day: $${q1.l?.toFixed(2)}–$${q1.h?.toFixed(2)} | Notes: ${d1}
+${s2}: $${q2.c?.toFixed(2)} (${q2.dp >= 0 ? '+' : ''}${q2.dp?.toFixed(2)}%) | Day: $${q2.l?.toFixed(2)}–$${q2.h?.toFixed(2)} | Notes: ${d2}`;
+    if (q3) prompt += `\n${s3}: $${q3.c?.toFixed(2)} (${q3.dp >= 0 ? '+' : ''}${q3.dp?.toFixed(2)}%) | Day: $${q3.l?.toFixed(2)}–$${q3.h?.toFixed(2)} | Notes: ${d3}`;
+
+    prompt += `
+
+RESPOND IN THIS FORMAT:
+📊 INDIVIDUAL ASSESSMENT
+${s1}: [2 sentences based on live data + notes only]
+${s2}: [2 sentences based on live data + notes only]
+${s3 ? s3 + ': [2 sentences based on live data + notes only]' : ''}
+
+⚖️ RELATIVE STRENGTHS
+[Compare momentum, notes, and any provided financials — no fabricated P/E or metrics]
+
+🎯 RELATIVE VERDICT
+[Which shows stronger momentum today and why — based only on data above]
+
+⚠ Note: Comparative valuation requires verified financial metrics. Live price momentum only — not a complete fundamental comparison. Not financial advice.
+
+Max 220 words. If notes are insufficient for a category, state "Insufficient data for comparative analysis."`;
 
     const result = await this.callGroqAI(prompt);
     btn.disabled = false; btn.textContent = '⚖️ Fetch Live & Compare';
@@ -2598,8 +2764,32 @@ Keep it concise and actionable.`;
         return;
       }
 
+      // ── STEP 3b: Lightweight frontend validation ───────────────────────────
+      if (analysisData?.quote) {
+        const q = analysisData.quote;
+        // Sanity check: impossible prices
+        if (q.c <= 0 || q.c > 1_000_000) {
+          thinkDiv.querySelector('.bubble').innerHTML =
+            `<strong>⚠️ Data validation failed for ${analysisData.symbol}</strong><br>` +
+            `Received price value appears invalid ($${q.c}). Reliable live market data unavailable.`;
+          return;
+        }
+        // Sanity check: OHLC consistency
+        if (q.h && q.l && q.h < q.l) {
+          thinkDiv.querySelector('.bubble').innerHTML =
+            `<strong>⚠️ Malformed market data for ${analysisData.symbol}</strong><br>` +
+            `OHLC integrity check failed. Please retry in a moment.`;
+          return;
+        }
+        // Stale data warning (show but don't block)
+        const freshness = q._meta?.freshness || '';
+        if (freshness === 'stale') {
+          thinkDiv.querySelector('span').textContent = `⚠ Stale data detected for ${analysisData.symbol} — proceeding with caution…`;
+        }
+      }
+
       // ── STEP 4: Build validated prompt ────────────────────────────────────
-      const prompt = this.buildAnalysisPrompt(msg, analysisData, confidence);
+      const prompt = await this.buildAnalysisPrompt(msg, analysisData, confidence);
 
       // ── STEP 5: Call Groq AI ──────────────────────────────────────────────
       document.getElementById('groqStatus').textContent = 'thinking…';
@@ -2609,7 +2799,7 @@ Keep it concise and actionable.`;
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${APP.groqKey}` },
         body: JSON.stringify({
-          model: CONFIG.GROQ_MODEL, max_tokens: 600, temperature: 0.2,
+          model: CONFIG.GROQ_MODEL, max_tokens: 800, temperature: 0.2,
           messages: [{ role: 'user', content: prompt }],
         }),
       });
@@ -2628,8 +2818,19 @@ Keep it concise and actionable.`;
       // ── STEP 6: Render result ─────────────────────────────────────────────
       thinkDiv.remove();
 
-      const confBadge = confidence
-        ? `<div style="margin-top:10px;padding:6px 10px;background:var(--s2);border-radius:4px;font-size:9px;color:var(--tx3)">📊 Confidence: <strong style="color:${confidence.score >= 75 ? 'var(--gn)' : confidence.score >= 50 ? 'var(--am)' : 'var(--rd)'}">${confidence.score}%</strong> · Data: ${analysisData?.quote?._meta?.freshness || 'unknown'} · Not financial advice</div>`
+      // Use dynamic confidence engine (replaces backend static score)
+      const dynConf = analysisData ? APP.calculateConfidence(analysisData) : null;
+      const riskData = analysisData ? APP.calculateRisk(analysisData.metrics, analysisData.quote) : null;
+      const sentData = analysisData ? APP.analyzeSentiment(analysisData.news) : null;
+
+      const confBadge = dynConf
+        ? `<div style="margin-top:10px;padding:8px 12px;background:var(--s2);border-radius:6px;font-size:9px;color:var(--tx3);border:1px solid var(--border);line-height:1.8">
+            📊 Confidence: <strong style="color:${dynConf.score >= 75 ? 'var(--gn)' : dynConf.score >= 55 ? 'var(--am)' : 'var(--rd)'}">${dynConf.score}% (${dynConf.label})</strong>
+            ${riskData ? ` &nbsp;·&nbsp; Risk: <strong style="color:${riskData.level==='High'?'var(--rd)':riskData.level==='Moderate'?'var(--am)':'var(--gn)'}">${riskData.level}</strong>` : ''}
+            ${sentData ? ` &nbsp;·&nbsp; Sentiment: <strong style="color:${sentData.label==='Positive'?'var(--gn)':sentData.label==='Negative'?'var(--rd)':'var(--tx2)'}">${sentData.label}</strong>` : ''}
+            &nbsp;·&nbsp; Data: ${analysisData?.quote?._meta?.freshness || 'recent'}
+            &nbsp;·&nbsp; <em>Not financial advice</em>
+           </div>`
         : '<div style="margin-top:8px;font-size:9px;color:var(--tx3)">⚠ Not financial advice</div>';
 
       const aiDiv = document.createElement('div');
@@ -2656,7 +2857,324 @@ Keep it concise and actionable.`;
     }
   },
 
-  buildAnalysisPrompt(userMessage, analysisData, confidence) {
+  // ── DYNAMIC CONFIDENCE ENGINE ─────────────────────────────────────────────
+  calculateConfidence(analysisData, technicals) {
+    if (!analysisData) return { score: 0, label: 'No Data', breakdown: {} };
+    const { quote, profile, metrics, news } = analysisData;
+
+    let score = 0;
+    const breakdown = {};
+
+    // Live price freshness (25 pts)
+    if (quote?.c && quote.c > 0) {
+      const freshness = quote._meta?.freshness || 'unknown';
+      if (freshness === 'live' || freshness === 'recent') { score += 25; breakdown.price = 'live'; }
+      else if (freshness === 'delayed') { score += 16; breakdown.price = 'delayed'; }
+      else { score += 8; breakdown.price = 'stale'; }
+    } else { breakdown.price = 'missing'; }
+
+    // Company profile (12 pts)
+    if (profile?.name && profile?.finnhubIndustry) { score += 12; breakdown.profile = 'full'; }
+    else if (profile?.name) { score += 6; breakdown.profile = 'partial'; }
+    else { breakdown.profile = 'missing'; }
+
+    // Financial metrics (25 pts)
+    if (metrics) {
+      const metricKeys = ['peTTM','epsTTM','revenueGrowthTTMYoy','grossMarginTTM','beta','roeTTM'];
+      const available = metricKeys.filter(k => metrics[k] != null && metrics[k] !== 0).length;
+      const pts = Math.round((available / metricKeys.length) * 25);
+      score += pts;
+      breakdown.metrics = `${available}/${metricKeys.length}`;
+    } else { breakdown.metrics = 'missing'; }
+
+    // News/sentiment (10 pts)
+    if (news?.length >= 3) { score += 10; breakdown.news = `${news.length} articles`; }
+    else if (news?.length > 0) { score += 5; breakdown.news = `${news.length} articles`; }
+    else { breakdown.news = 'none'; }
+
+    // 52W range (8 pts)
+    if (metrics?.['52WeekHigh'] && metrics?.['52WeekLow']) { score += 8; breakdown.range = 'available'; }
+    else { breakdown.range = 'missing'; }
+
+    // Technical indicators from candle data (20 pts)
+    if (technicals?.candlesBased) {
+      let techPts = 0;
+      if (technicals.rsi != null) techPts += 7;
+      if (technicals.macd != null) techPts += 6;
+      if (technicals.ma50 != null) techPts += 4;
+      if (technicals.ma200 != null) techPts += 3;
+      score += techPts;
+      breakdown.technicals = `${techPts}/20pts`;
+    } else { breakdown.technicals = 'intraday-only'; }
+
+    // Hard cap: never exceed 88
+    score = Math.min(score, 88);
+
+    // Caps for missing critical data
+    if (!quote?.c) score = Math.min(score, 25);
+    else if (!metrics || breakdown.metrics === 'missing') score = Math.min(score, 60);
+    else if (!technicals?.candlesBased) score = Math.min(score, 75);
+
+    const label = score >= 75 ? 'Strong' : score >= 60 ? 'Moderate' : 'Limited';
+    return { score: Math.round(score), label, breakdown };
+  },
+
+  // ── RISK SCORER ───────────────────────────────────────────────────────────
+  calculateRisk(metrics, quote, technicals) {
+    if (!metrics && !quote) return { level: 'Unknown', factors: [] };
+    let riskScore = 0;
+    const factors = [];
+
+    const beta = parseFloat(metrics?.beta);
+    if (!isNaN(beta)) {
+      if (beta > 1.8)      { riskScore += 4; factors.push(`Very high beta (${beta.toFixed(2)})`); }
+      else if (beta > 1.4) { riskScore += 3; factors.push(`High beta (${beta.toFixed(2)})`); }
+      else if (beta > 1.1) { riskScore += 2; factors.push(`Elevated beta (${beta.toFixed(2)})`); }
+      else if (beta < 0.6) { riskScore += 1; factors.push(`Defensive beta (${beta.toFixed(2)})`); }
+    }
+
+    const pe = parseFloat(metrics?.peTTM);
+    if (!isNaN(pe) && pe > 0) {
+      if (pe > 80)       { riskScore += 3; factors.push(`Extreme P/E (${pe.toFixed(1)}x)`); }
+      else if (pe > 50)  { riskScore += 2; factors.push(`High P/E (${pe.toFixed(1)}x)`); }
+      else if (pe > 35)  { riskScore += 1; factors.push(`Elevated P/E (${pe.toFixed(1)}x)`); }
+    }
+
+    const de = parseFloat(metrics?.totalDebt2TotalEquityAnnual);
+    if (!isNaN(de)) {
+      if (de > 3)      { riskScore += 3; factors.push(`High leverage D/E (${de.toFixed(2)})`); }
+      else if (de > 2) { riskScore += 2; factors.push(`Elevated D/E (${de.toFixed(2)})`); }
+    }
+
+    // Intraday volatility
+    if (quote?.dp != null) {
+      const dayMove = Math.abs(quote.dp);
+      if (dayMove > 8)      { riskScore += 3; factors.push(`Extreme intraday move (${dayMove.toFixed(1)}%)`); }
+      else if (dayMove > 5) { riskScore += 2; factors.push(`High intraday volatility (${dayMove.toFixed(1)}%)`); }
+    }
+
+    // RSI extremes add risk
+    if (technicals?.rsi != null) {
+      if (technicals.rsi >= 80)      { riskScore += 2; factors.push(`RSI overbought (${technicals.rsi})`); }
+      else if (technicals.rsi <= 20) { riskScore += 2; factors.push(`RSI oversold (${technicals.rsi})`); }
+    }
+
+    // Below MA200 = elevated structural risk
+    if (technicals?.ma200 && quote?.c && quote.c < technicals.ma200) {
+      riskScore += 1; factors.push('Price below 200-day MA');
+    }
+
+    const level = riskScore >= 7 ? 'High' : riskScore >= 4 ? 'Moderate' : 'Low';
+    return { level, score: riskScore, factors };
+  },
+
+  // ── SENTIMENT ANALYSER ────────────────────────────────────────────────────
+  analyzeSentiment(news) {
+    if (!news?.length) return { label: 'Neutral', score: 0, summary: 'No recent news available.' };
+
+    const positiveWords = ['beat','surge','record','growth','profit','upgrade','strong','rally','gain','soar','expansion','exceed','outperform','raised','bullish'];
+    const negativeWords = ['miss','drop','decline','loss','cut','downgrade','weak','fall','concern','risk','warning','below','disappoint','selloff','bearish','layoff','recall','investigation','lawsuit'];
+
+    let posCount = 0, negCount = 0;
+    const headlines = news.slice(0, 5).map(n => n.headline?.toLowerCase() || '');
+
+    for (const h of headlines) {
+      for (const w of positiveWords) { if (h.includes(w)) posCount++; }
+      for (const w of negativeWords) { if (h.includes(w)) negCount++; }
+    }
+
+    const netScore = posCount - negCount;
+    const label = netScore > 1 ? 'Positive' : netScore < -1 ? 'Negative' : 'Neutral';
+    const summary = news.slice(0, 3).map(n => `• ${n.headline}`).join('\n');
+    return { label, score: netScore, summary, count: news.length };
+  },
+
+  // ── RSI CALCULATION (from closes array) ──────────────────────────────────
+  _calcRSI(closes, period = 14) {
+    if (!closes || closes.length < period + 1) return null;
+    let gains = 0, losses = 0;
+    for (let i = 1; i <= period; i++) {
+      const diff = closes[i] - closes[i - 1];
+      if (diff >= 0) gains += diff; else losses -= diff;
+    }
+    let avgGain = gains / period;
+    let avgLoss = losses / period;
+    for (let i = period + 1; i < closes.length; i++) {
+      const diff = closes[i] - closes[i - 1];
+      avgGain = (avgGain * (period - 1) + (diff > 0 ? diff : 0)) / period;
+      avgLoss = (avgLoss * (period - 1) + (diff < 0 ? -diff : 0)) / period;
+    }
+    if (avgLoss === 0) return 100;
+    const rs = avgGain / avgLoss;
+    return Math.round(100 - (100 / (1 + rs)));
+  },
+
+  // ── EMA CALCULATION ───────────────────────────────────────────────────────
+  _calcEMA(closes, period) {
+    if (!closes || closes.length < period) return null;
+    const k = 2 / (period + 1);
+    let ema = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    for (let i = period; i < closes.length; i++) {
+      ema = closes[i] * k + ema * (1 - k);
+    }
+    return ema;
+  },
+
+  // ── MACD CALCULATION ──────────────────────────────────────────────────────
+  _calcMACD(closes) {
+    if (!closes || closes.length < 26) return null;
+    const ema12 = this._calcEMA(closes, 12);
+    const ema26 = this._calcEMA(closes, 26);
+    if (ema12 == null || ema26 == null) return null;
+    const macdLine = ema12 - ema26;
+
+    // Signal line: 9-period EMA of MACD values
+    if (closes.length < 35) return { macdLine, signal: null, histogram: null };
+    const macdValues = [];
+    const k12 = 2 / 13, k26 = 2 / 27;
+    let e12 = closes.slice(0, 12).reduce((a, b) => a + b, 0) / 12;
+    let e26 = closes.slice(0, 26).reduce((a, b) => a + b, 0) / 26;
+    for (let i = 12; i < closes.length; i++) { e12 = closes[i] * k12 + e12 * (1 - k12); }
+    for (let i = 26; i < closes.length; i++) { e26 = closes[i] * k26 + e26 * (1 - k26); }
+    // Simplified: return current macdLine and direction
+    const prevE12 = this._calcEMA(closes.slice(0, -1), 12);
+    const prevE26 = this._calcEMA(closes.slice(0, -1), 26);
+    const prevMacd = prevE12 != null && prevE26 != null ? prevE12 - prevE26 : null;
+    const crossover = prevMacd != null
+      ? (macdLine > 0 && prevMacd <= 0 ? 'bullish_cross'
+        : macdLine < 0 && prevMacd >= 0 ? 'bearish_cross'
+        : macdLine > 0 ? 'bullish' : 'bearish')
+      : (macdLine > 0 ? 'bullish' : 'bearish');
+    return { macdLine: parseFloat(macdLine.toFixed(4)), crossover };
+  },
+
+  // ── SIMPLE MOVING AVERAGE ─────────────────────────────────────────────────
+  _calcSMA(closes, period) {
+    if (!closes || closes.length < period) return null;
+    return closes.slice(-period).reduce((a, b) => a + b, 0) / period;
+  },
+
+  // ── TECHNICAL INDICATOR ENGINE (enhanced with candle data) ────────────────
+  computeTechnicals(metrics, quote, candles) {
+    const result = {
+      rsi: null, rsiNote: null, macd: null, macdNote: null,
+      ma50: null, ma200: null, maNote: null,
+      trend: 'Neutral', position52w: null, candlesBased: false,
+    };
+    if (!quote?.c) return result;
+
+    // 52-week position (always available from metrics)
+    const hi = parseFloat(metrics?.['52WeekHigh']);
+    const lo = parseFloat(metrics?.['52WeekLow']);
+    if (!isNaN(hi) && !isNaN(lo) && hi > lo) {
+      const pos = Math.round(((quote.c - lo) / (hi - lo)) * 100);
+      result.position52w = pos;
+      result.trend = pos >= 70 ? 'Bullish' : pos <= 30 ? 'Bearish' : 'Neutral';
+    }
+
+    // If candle data available — compute RSI, MACD, MAs properly
+    const closes = candles?.c?.length >= 15 ? candles.c : null;
+
+    if (closes) {
+      result.candlesBased = true;
+
+      // RSI
+      const rsi = this._calcRSI(closes);
+      if (rsi != null) {
+        result.rsi = rsi;
+        result.rsiNote = rsi >= 75 ? `RSI ${rsi} — overbought territory`
+          : rsi >= 60 ? `RSI ${rsi} — mildly overbought`
+          : rsi <= 25 ? `RSI ${rsi} — oversold territory`
+          : rsi <= 40 ? `RSI ${rsi} — mildly oversold`
+          : `RSI ${rsi} — neutral momentum`;
+      }
+
+      // MACD
+      if (closes.length >= 26) {
+        const macd = this._calcMACD(closes);
+        if (macd) {
+          result.macd = macd;
+          result.macdNote = macd.crossover === 'bullish_cross' ? 'MACD bullish crossover — momentum turning positive'
+            : macd.crossover === 'bearish_cross' ? 'MACD bearish crossover — momentum turning negative'
+            : macd.crossover === 'bullish' ? 'MACD positive — bullish momentum'
+            : 'MACD negative — bearish momentum';
+        }
+      }
+
+      // Moving averages
+      if (closes.length >= 50)  result.ma50  = parseFloat(this._calcSMA(closes, 50).toFixed(2));
+      if (closes.length >= 200) result.ma200 = parseFloat(this._calcSMA(closes, 200).toFixed(2));
+
+      if (result.ma50 && result.ma200) {
+        const aboveMa50  = quote.c > result.ma50;
+        const aboveMa200 = quote.c > result.ma200;
+        const goldenCross = result.ma50 > result.ma200;
+        if (aboveMa200 && aboveMa50 && goldenCross)
+          result.maNote = `Price above MA50 ($${result.ma50}) & MA200 ($${result.ma200}) — long-term bullish structure`;
+        else if (!aboveMa200)
+          result.maNote = `Price below MA200 ($${result.ma200}) — long-term bearish structure`;
+        else if (aboveMa200 && !aboveMa50)
+          result.maNote = `Price below MA50 ($${result.ma50}) but above MA200 ($${result.ma200}) — consolidating`;
+        else
+          result.maNote = `MA50 ($${result.ma50}) | MA200 ($${result.ma200})`;
+        // Refine trend from MAs
+        if (aboveMa200 && aboveMa50) result.trend = 'Bullish';
+        else if (!aboveMa200) result.trend = 'Bearish';
+      } else if (result.ma50) {
+        result.maNote = `MA50: $${result.ma50} | Price ${quote.c > result.ma50 ? 'above' : 'below'} MA50`;
+      }
+    } else {
+      // Fallback: intraday momentum when no candle data
+      if (quote.dp != null) {
+        const dp = quote.dp;
+        result.rsiNote = dp > 3 ? 'Intraday momentum strongly bullish'
+          : dp > 1 ? 'Intraday momentum mildly bullish'
+          : dp < -3 ? 'Intraday momentum strongly bearish'
+          : dp < -1 ? 'Intraday momentum mildly bearish'
+          : 'Intraday momentum neutral';
+      }
+      if (quote.o && quote.c) {
+        const vsOpenNum = (quote.c - quote.o) / quote.o * 100;
+        result.maNote = `Trading ${vsOpenNum > 0 ? '+' : ''}${vsOpenNum.toFixed(1)}% vs open (no historical MA data)`;
+      }
+    }
+
+    return result;
+  },
+
+  // ── MACRO CONTEXT MAPPER ──────────────────────────────────────────────────
+  getMacroContext(profile) {
+    const industry = (profile?.finnhubIndustry || '').toLowerCase();
+    const name = (profile?.name || '').toLowerCase();
+
+    if (industry.includes('semiconductor') || industry.includes('chip') || name.includes('nvidia') || name.includes('amd') || name.includes('broadcom'))
+      return 'Semiconductors: AI infrastructure capex supercycle driving demand. Key risks: export controls, inventory digestion, and customer concentration. TSMC capacity and HBM supply remain gating factors.';
+    if (industry.includes('software') || industry.includes('saas') || industry.includes('cloud'))
+      return 'Software/Cloud: AI-native features driving net revenue retention. Valuation multiples rate-sensitive. Watch FCF margins and net new ARR growth as key institutional metrics.';
+    if (industry.includes('bank') || industry.includes('financ') || industry.includes('insurance'))
+      return 'Financials: Net interest margin compression as rate cycle turns. Credit quality and reserve builds the key variable. Capital return capacity (buybacks/dividends) drives relative performance.';
+    if (industry.includes('energy') || industry.includes('oil') || industry.includes('gas'))
+      return 'Energy: Brent/WTI spread and OPEC+ discipline set earnings floor. Energy transition capex increasing. Shareholder returns (buybacks/dividends) matter more than growth multiple.';
+    if (industry.includes('biotech') || industry.includes('pharma') || industry.includes('drug'))
+      return 'Biopharma: Binary catalyst risk from FDA decisions. GLP-1 and oncology dominating pipeline value. IRA drug pricing reform creating long-term headwinds for high-revenue drugs.';
+    if (industry.includes('healthcare'))
+      return 'Healthcare: Demographic tailwinds offset by reimbursement pressure. AI diagnostics emerging as cost-reduction driver. Watch Medicare Advantage enrollment trends.';
+    if (industry.includes('consumer') || industry.includes('retail'))
+      return 'Consumer: Bifurcated spending — premium resilient, mid-market under pressure. Input cost deflation improving margins. Credit delinquency trends a forward indicator.';
+    if (industry.includes('auto') || industry.includes('electric vehicle'))
+      return 'Auto/EV: EV demand normalizing after initial surge. Battery cost curves still declining but slower. Legacy OEM transition costs pressuring margins. China competition intensifying.';
+    if (industry.includes('real estate') || industry.includes('reit'))
+      return 'REITs: Elevated rates pressuring cap rate spreads and refinancing costs. Office secular headwinds persist. Industrial and data center REITs outperforming on AI demand.';
+    if (industry.includes('telecom'))
+      return 'Telecom: Mature sector; dividend yield and free cash flow generation central to valuation. 5G monetization still developing. Fiber build costs a near-term margin headwind.';
+    if (industry.includes('media') || industry.includes('entertainment'))
+      return 'Media/Entertainment: Streaming profitability focus replacing growth-at-all-costs. Ad market recovery supporting digital media. Linear TV secular decline accelerating.';
+    if (industry.includes('aerospace') || industry.includes('defense'))
+      return 'Aerospace/Defense: Elevated geopolitical risk driving budget tailwinds. Supply chain normalization ongoing. Long-cycle backlog visibility supports earnings predictability.';
+    return 'Broad market: Fed policy trajectory, corporate earnings revision cycle, and AI productivity narrative remain primary macro drivers. Geopolitical risk premium elevated.';
+  },
+
+  async buildAnalysisPrompt(userMessage, analysisData, confidence) {
     if (!analysisData || !analysisData.quote) {
       return `You are StockMind AI, a professional financial assistant.
 The user asked: "${userMessage}"
@@ -2668,24 +3186,124 @@ Do NOT guess any prices, metrics, or financial data. Keep response under 50 word
     }
 
     const { quote, profile, metrics, news, symbol } = analysisData;
-    const conf = confidence || { score: 0, label: 'Low' };
-    const f    = (v, s = '') => v != null && v !== 0 ? `${Number(v).toFixed(2)}${s}` : 'N/A';
 
-    return `You are StockMind AI — institutional-grade financial analysis engine.
+    // Lightweight validation — refuse if critical data missing
+    if (!quote?.c || quote.c <= 0) {
+      return `You are StockMind AI. Inform the user: "Reliable live market data unavailable for ${symbol || 'this symbol'}. Cannot proceed with analysis." Keep response under 30 words. Do NOT fabricate any data.`;
+    }
 
-VERIFIED DATA FOR: ${symbol} | Confidence: ${conf.score}% (${conf.label})
+    const f = (v, s = '') => v != null && v !== 0 ? `${Number(v).toFixed(2)}${s}` : 'N/A';
+
+    // Fetch candle data best-effort for technical indicators (non-blocking)
+    let candles = null;
+    try {
+      candles = await ApiClient.candles(symbol, 220);
+      // Validate candle response structure
+      if (!candles?.c?.length || candles.s === 'no_data') candles = null;
+    } catch(e) { candles = null; }
+
+    // Compute enhanced data — pass candles for real RSI/MACD/MA
+    const technicals  = this.computeTechnicals(metrics, quote, candles);
+    const risk        = this.calculateRisk(metrics, quote, technicals);
+    const sentiment   = this.analyzeSentiment(news);
+    const macroCtx    = this.getMacroContext(profile);
+
+    // Use dynamic confidence engine with technicals
+    const dynConf = this.calculateConfidence(analysisData, technicals);
+    const conf = dynConf;
+
+    // 52W position string
+    const pos52w = technicals.position52w != null
+      ? `${technicals.position52w}% of 52W range`
+      : 'N/A';
+
+    // Analyst target upside/downside
+    const targetPrice = metrics?.targetMean || metrics?.priceTarget || null;
+    const targetStr   = targetPrice && quote.c
+      ? `Analyst Target: $${parseFloat(targetPrice).toFixed(2)} (${((targetPrice - quote.c) / quote.c * 100).toFixed(1)}% vs current)`
+      : 'Analyst Target: N/A';
+
+    // Forward P/E and PEG from metrics
+    const fwdPE = metrics?.peForward || metrics?.forwardPE || null;
+    const peg   = metrics?.pegRatio  || null;
+    const egr   = metrics?.epsGrowth || metrics?.earningsGrowth || null;
+
+    // Determine what verdict is possible
+    const hasEnoughForVerdict = quote?.c && metrics?.peTTM && metrics?.revenueGrowthTTMYoy;
+    const verdictRule = hasEnoughForVerdict
+      ? 'Provide a BUY / HOLD / SELL verdict with concise reasoning.'
+      : 'DO NOT provide a BUY/HOLD/SELL verdict — insufficient verified metrics. State this explicitly.';
+
+    // Build technicals line with MACD
+    const techLine = [
+      `52W Position=${pos52w}`,
+      `Trend=${technicals.trend}`,
+      technicals.rsiNote || 'RSI: N/A (no candle history)',
+      technicals.macdNote || (candles ? 'MACD: calculated' : 'MACD: N/A (no candle history)'),
+      technicals.maNote || '',
+      `Beta=${f(metrics?.beta)}`,
+    ].filter(Boolean).join(' | ');
+
+    // Valuation block — richer with fwd P/E and PEG
+    const valuationLine = metrics && Object.keys(metrics).length > 3
+      ? `P/E(TTM)=${f(metrics.peTTM)}x | FwdP/E=${fwdPE ? f(fwdPE)+'x' : 'N/A'} | PEG=${peg ? f(peg) : 'N/A'} | EPS=$${f(metrics.epsTTM)} | RevGrowth=${f(metrics['revenueGrowthTTMYoy'],'%')} | EarningsGrowth=${egr ? f(egr,'%') : 'N/A'} | GrossMargin=${f(metrics.grossMarginTTM,'%')} | ROE=${f(metrics.roeTTM,'%')} | ${targetStr}`
+      : 'VALUATION: Metrics unavailable — do not fabricate any ratios';
+
+    return `You are StockMind AI — institutional-grade financial analysis engine. Respond ONLY in the structured format below. Be concise, analytical, and evidence-based. Zero filler.
+
+═══════════════════════════════════════
+VERIFIED DATA PACKAGE: ${symbol}
+Confidence: ${conf.score}% (${conf.label}) | Risk: ${risk.level} | Sentiment: ${sentiment.label}${candles ? ' | Technicals: candle-based' : ' | Technicals: intraday-only'}
+═══════════════════════════════════════
 
 LIVE PRICE (${quote._meta?.freshness || 'recent'}): $${quote.c?.toFixed(2)} | Change: ${quote.dp >= 0 ? '+' : ''}${quote.dp?.toFixed(2)}% | High: $${quote.h?.toFixed(2)} | Low: $${quote.l?.toFixed(2)} | Prev Close: $${quote.pc?.toFixed(2)}
 
-${profile ? `COMPANY: ${profile.name} | ${profile.finnhubIndustry || 'N/A'} | ${profile.exchange || 'N/A'} | Cap: ${profile.marketCapitalization ? '$' + (profile.marketCapitalization/1000).toFixed(1) + 'B' : 'N/A'}` : 'COMPANY: Not available — do not fabricate'}
+${profile ? `COMPANY: ${profile.name} | Sector: ${profile.finnhubIndustry || 'N/A'} | Exchange: ${profile.exchange || 'N/A'} | Market Cap: ${profile.marketCapitalization ? '$' + (profile.marketCapitalization/1000).toFixed(1) + 'B' : 'N/A'}` : 'COMPANY: Profile unavailable — do not fabricate'}
 
-${metrics && Object.keys(metrics).length > 3 ? `METRICS: P/E=${f(metrics.peTTM)} | EPS=${f(metrics.epsTTM,'$')} | RevGrowth=${f(metrics['revenueGrowthTTMYoy'],'%')} | Margin=${f(metrics.grossMarginTTM,'%')} | Beta=${f(metrics.beta)} | 52W High=${f(metrics['52WeekHigh'],'$')} | 52W Low=${f(metrics['52WeekLow'],'$')} | ROE=${f(metrics.roeTTM,'%')}` : 'METRICS: Not available — do not fabricate any ratios'}
+VALUATION: ${valuationLine}
 
-${news?.length > 0 ? `NEWS: ${news.slice(0,3).map(n => n.headline).join(' | ')}` : 'NEWS: None available'}
+TECHNICALS: ${techLine}
 
-RULES: Only use data above. Never invent metrics. Only give BUY/HOLD/SELL if price+PE+revenue are all present. Be concise (max 220 words). End: "⚠ Confidence: ${conf.score}% | Not financial advice"
+RISK FACTORS: Level=${risk.level}${risk.factors.length ? ' | ' + risk.factors.join(' | ') : ' | No elevated risk signals'}
 
-USER: ${userMessage}`;
+SENTIMENT: ${sentiment.label} (${news?.length || 0} articles) | Headlines: ${news?.slice(0,2).map(n => n.headline?.slice(0,70)).join(' // ') || 'None'}
+
+MACRO: ${macroCtx}
+
+═══════════════════════════════════════
+REQUIRED RESPONSE FORMAT (use exactly):
+
+📊 SUMMARY
+[2 sentences: what is this company and what does today's data tell us]
+
+📈 VALUATION
+[P/E vs forward P/E, PEG context, growth rate, analyst target — only if metrics available; else state "Insufficient verified data"]
+
+⚡ TECHNICALS
+[52W position, RSI reading, MACD signal, MA50/MA200 structure — use the data above; note if candle-based or intraday-only]
+
+🔴 RISK
+[Risk level + top 1-2 factors; if Low, state "No elevated risk signals identified"]
+
+🌐 MARKET CONTEXT
+[1 sentence of sector/macro context — use the MACRO line above]
+
+💬 SENTIMENT
+[${sentiment.label} — brief note on news tone, ${news?.length || 0} recent articles]
+
+🎯 VERDICT
+${verdictRule}
+
+⚠ Confidence: ${conf.score}% (${conf.label}) | Not financial advice
+═══════════════════════════════════════
+
+DATA RULES (non-negotiable):
+- Only use data in this prompt. Never invent, estimate, or recall training data for prices/metrics.
+- If a section's data is N/A, write "Insufficient verified data for this section."
+- Comparative analysis requires verified data for ALL compared entities.
+- Max 280 words total.
+
+USER QUERY: ${userMessage}`;
   },
 
     clearChat() {
@@ -2806,17 +3424,39 @@ Give ONE sentence: start with BUY, HOLD, or SELL then explain why based only on 
       if (q) dataStr += `${sym}: $${q.c?.toFixed(2)} (${q.dp?.toFixed(2)}%)\n`;
     }
 
-    const prompt = `Generate a concise daily stock market brief for ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} covering:
+    const prompt = `You are StockMind AI — institutional equity analyst. Generate a concise, data-driven daily market brief for ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} in Bloomberg Terminal style. No filler, no generic investing advice.
+
+VERIFIED LIVE DATA (Finnhub via secure backend):
 ${dataStr}
 
-1. Market Overview (what the data tells us)
-2. Top Movers Analysis
-3. Sector Rotation Signals
-4. Top 3 Stock Picks with reasoning (based on above live data)
-5. Key Risk Factors
-6. AI Confidence Outlook
+RESPOND IN THIS EXACT FORMAT:
 
-Keep it actionable and data-driven. Reference the actual prices above.`;
+📊 MARKET OVERVIEW
+[2 sentences: what today's index performance reveals about market sentiment. Use SPY/QQQ/DIA data.]
+
+📈 TOP MOVERS ANALYSIS
+[Which stocks led/lagged today and what the price action suggests. Be specific with the data above.]
+
+🔄 SECTOR ROTATION SIGNALS
+[What the relative performance between tech (QQQ), blue-chip (DIA), and broad market (SPY) signals about institutional positioning.]
+
+⚡ TECHNICAL PULSE
+[Momentum characterisation: are markets trending, consolidating, or reversing? Use % changes from live data.]
+
+🌐 MACRO CONTEXT
+[1 sentence: which macro theme — Fed policy, AI capex cycle, earnings revision, credit conditions — is most relevant to today's price action.]
+
+🎯 TOP 3 ACTIONABLE OBSERVATIONS
+1. [Stock/index with specific data point and implication]
+2. [Stock/index with specific data point and implication]
+3. [Stock/index with specific data point and implication]
+
+⚠ KEY RISKS TO WATCH
+[1-2 sentences: what could shift the current setup]
+
+📊 CONFIDENCE: Data-verified via live backend | Not financial advice | ${new Date().toLocaleTimeString()}
+
+Max 300 words. Reference specific prices and % changes from the data above. Do not fabricate any metrics not in the data above.`;
 
     const result = await this.callGroqAI(prompt);
     btn.disabled = false; btn.textContent = '📰 Generate Brief';
