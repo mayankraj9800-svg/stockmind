@@ -795,6 +795,7 @@ html, body {
     <div class="tab"    id="tab-fa"        data-tab="fa">       <span class="tab-icon">🔬</span>Buy/Sell</div>
     <div class="tab"    id="tab-cmp"       data-tab="cmp">      <span class="tab-icon">⚖</span>Compare</div>
     <div class="tab"    id="tab-heatmap"   data-tab="heatmap">  <span class="tab-icon">🟩</span>Heatmap</div>
+    <div class="tab"    id="tab-history"   data-tab="history">  <span class="tab-icon">🕐</span>History</div>
   </div>
 
   <div class="layout">
@@ -1192,6 +1193,19 @@ html, body {
       </div>
     </div>
 
+    <div class="panel" id="panel-history">
+      <div style="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--s1);display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div class="ph" style="margin-bottom:2px">🕐 Analysis History</div>
+          <div style="font-size:10px;color:var(--tx3)">All your past AI analyses — synced to your Google account</div>
+        </div>
+        <button class="btn-outline" id="clearHistoryBtn" onclick="APP.clearHistory()">🗑 Clear History</button>
+      </div>
+      <div class="panel-scroll" id="historyList">
+        <div style="color:var(--tx3);font-size:11px;padding:20px;text-align:center">Loading history…</div>
+      </div>
+    </div>
+
   </div><!-- /.layout -->
 </div><!-- /#app -->
 
@@ -1199,24 +1213,16 @@ html, body {
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════════
-// STOCKMIND AI PRO — FRONTEND APPLICATION v5.0
-//
-// Architecture: Frontend → Node.js/Express Backend (port 3001) → Finnhub API
-//
-// ● ALL Finnhub calls go through the local backend — key never exposed in browser
-// ● Groq AI calls go directly from browser (Groq supports CORS natively)
-// ● NO direct Finnhub calls, NO corsproxy.io, NO exposed API keys
-// ● Full retry logic, graceful fallbacks, live connection health checks
+// STOCKMIND AI PRO — FRONTEND v3.0
+// Production-grade financial intelligence platform
+// ● Confidence scoring · Hallucination prevention · Data validation
+// ● Firebase auth · Per-user keys · Full analysis history
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONFIG
-// ─────────────────────────────────────────────────────────────────────────────
 const CONFIG = {
-  // Auto-detect backend URL — uses Render in production, localhost in dev
   BACKEND_URL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:3001/api'
-    : 'https://stockmind-backend.onrender.com/api',
+    : 'https://stockmind-backend-mwqw.onrender.com/api',
   GROQ_URL:          'https://api.groq.com/openai/v1/chat/completions',
   GROQ_MODEL:        'llama-3.3-70b-versatile',
   TICKER_SYMBOLS:    ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'TSLA', 'META', 'AMZN', 'AMD'],
@@ -1235,7 +1241,7 @@ const ApiClient = {
   /** Get headers including the user's Finnhub key */
   _headers() {
     return {
-      'Content-Type': 'application/json',
+      'Content-Type':  'application/json',
       'x-finnhub-key': APP?.finnhubKey || '',
     };
   },
@@ -1490,6 +1496,15 @@ const APP = {
     document.getElementById('setup').style.display = 'none';
     document.getElementById('app').style.display   = 'flex';
 
+    // Pre-warm the backend immediately so it's ready when user types
+    setTimeout(async () => {
+      try {
+        await fetch(`${CONFIG.BACKEND_URL}/health`, {
+          headers: { 'x-finnhub-key': this.finnhubKey }
+        });
+      } catch(e) { /* silent pre-warm */ }
+    }, 500);
+
     // Show user info + sign-out in topbar
     if (this.currentUser) {
       const brand = document.querySelector('.brand');
@@ -1563,6 +1578,69 @@ const APP = {
 
   // ── LEGACY COMPAT: no-op since we use Firestore now ──────────────────────
   loadStoredData() {},
+
+  // ── HISTORY ───────────────────────────────────────────────────────────────
+  async loadHistory() {
+    const listEl = document.getElementById('historyList');
+    if (!listEl) return;
+
+    if (!this.currentUser) {
+      listEl.innerHTML = '<div style="padding:20px;color:var(--tx3);font-size:11px;text-align:center">Sign in to see your history</div>';
+      return;
+    }
+
+    listEl.innerHTML = '<div style="padding:20px;color:var(--tx3);font-size:11px;text-align:center">Loading…</div>';
+
+    const userData = await this.loadUserData(this.currentUser.uid);
+    const history  = userData?.analysisHistory || [];
+
+    if (!history.length) {
+      listEl.innerHTML = '<div style="padding:20px;color:var(--tx3);font-size:11px;text-align:center">No analyses yet. Go to AI Analyst tab and analyse a stock!</div>';
+      return;
+    }
+
+    // Show newest first
+    const sorted = [...history].reverse();
+
+    listEl.innerHTML = sorted.map((item, i) => `
+      <div style="border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:12px;background:var(--s1)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="background:var(--ac);color:#000;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px">${item.symbol || '—'}</span>
+            <span style="font-size:10px;color:var(--tx3)">${item.timestamp ? new Date(item.timestamp).toLocaleString() : '—'}</span>
+          </div>
+          <button onclick="APP.rerunAnalysis('${item.symbol}')" style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 8px;color:var(--tx3);cursor:pointer;font-size:9px">↻ Re-run</button>
+        </div>
+        <div style="font-size:11px;color:var(--tx2);line-height:1.6;white-space:pre-wrap;max-height:120px;overflow-y:auto">${item.result || '—'}</div>
+      </div>
+    `).join('');
+  },
+
+  async clearHistory() {
+    if (!this.currentUser) return;
+    if (!confirm('Clear all analysis history? This cannot be undone.')) return;
+    const { db, doc, updateDoc } = window.FB;
+    try {
+      await updateDoc(doc(db, 'users', this.currentUser.uid), { analysisHistory: [] });
+      this.toast('✅ History cleared');
+      this.loadHistory();
+    } catch(e) {
+      this.toast('❌ Failed to clear history');
+    }
+  },
+
+  rerunAnalysis(symbol) {
+    // Switch to AI Analyst tab and pre-fill the symbol
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
+    document.getElementById('tab-chat')?.classList.add('on');
+    document.getElementById('panel-chat')?.classList.add('on');
+    const input = document.getElementById('chatInput');
+    if (input) {
+      input.value = `Analyse ${symbol}`;
+      input.focus();
+    }
+  },
 
   saveData() {
     localStorage.setItem('stockmind_watchlist',  JSON.stringify(this.state.watchlist));
@@ -1689,6 +1767,7 @@ const APP = {
     if (tabName === 'portfolio') this.refreshPortfolio();
     if (tabName === 'heatmap')   this.loadHeatmap();
     if (tabName === 'brief')     this.setDate();
+    if (tabName === 'history')   this.loadHistory();
   },
 
   // ── TRADINGVIEW CHART ─────────────────────────────────────────────────────
@@ -2257,6 +2336,8 @@ Keep it concise and actionable.`;
     if (!msg) return;
 
     const msgs = document.getElementById('chatMsgs');
+
+    // Add user message
     const userDiv = document.createElement('div');
     userDiv.className = 'msg user';
     userDiv.innerHTML = `<div class="msg-label">You</div><div class="bubble user">${msg}</div>`;
@@ -2264,92 +2345,210 @@ Keep it concise and actionable.`;
     input.value = '';
     msgs.scrollTop = msgs.scrollHeight;
 
-    // ── SMART TICKER RESOLUTION ──────────────────────────────────────────
-    // 1. Extract any explicit uppercase tickers from the message (e.g. AAPL)
-    // 2. For remaining words, search Finnhub symbol API to resolve company names
-    // This means ANY company name works — no hardcoded list needed.
-
-    const IGNORE_WORDS = new Set([
-      'AI','THE','FOR','AND','BUY','NOT','GET','CAN','USD','DAY','NOW',
-      'HOW','WHY','WHO','ARE','HAS','ITS','ALL','TOP','NEW','OLD','USE',
-      'ANY','ONE','TWO','MY','ME','IS','IT','IN','UP','DO','AT','BE','A',
-    ]);
-
-    // Step 1: explicit uppercase tickers
-    const explicitTickers = [...new Set(
-      (msg.match(/\b[A-Z]{1,5}\b/g) || []).filter(t => t.length >= 2 && !IGNORE_WORDS.has(t))
-    )];
-
-    // Step 2: search Finnhub for any words/phrases not already covered
-    const searchResults = [];
-    if (msg.trim().length > 1) {
-      try {
-        const res  = await fetch(`${CONFIG.BACKEND_URL}/search/${encodeURIComponent(msg.trim())}`);
-        const json = await res.json();
-        if (json.success && json.data.length > 0) {
-          // Take the best match — first result from Finnhub
-          searchResults.push(json.data[0].symbol);
-        }
-      } catch(e) { /* silent */ }
-    }
-
-    const tickerMatch = [...new Set([...explicitTickers, ...searchResults])].slice(0, 3);
-    console.log('[Chat] Resolved tickers:', tickerMatch);
-
-    // Step 3: fetch live prices for all resolved tickers
-    let liveContext = '';
-    for (const ticker of tickerMatch) {
-      const q = await ApiClient.quote(ticker);
-      if (q && q.c) {
-        liveContext += `\n${ticker}: Current Price $${q.c.toFixed(2)}, Change ${q.dp?.toFixed(2)}%, Today High $${q.h?.toFixed(2)}, Today Low $${q.l?.toFixed(2)}, Prev Close $${q.pc?.toFixed(2)}`;
-      }
-    }
-
-    console.log('[Chat] Live context:', liveContext || 'NONE');
-
-    const prompt = liveContext
-      ? `You are StockMind AI Pro. You have LIVE real-time stock prices fetched RIGHT NOW from Finnhub:
-${liveContext}
-
-STRICT RULES:
-- Use ONLY the live prices above — they are current and accurate.
-- NEVER say "as of my knowledge cutoff" or use old training data prices.
-- Always show the exact live price in your response.
-
-User asked: ${msg}
-
-Give a clear analysis using the live price. Include BUY/HOLD/SELL verdict. Not financial advice.`
-      : `You are StockMind AI Pro, a professional stock market analyst.
-
-User asked: ${msg}
-
-No live price data was found for a specific stock. Answer generally or ask the user to specify a company name or ticker. Not financial advice.`;
-
-    // Thinking indicator
+    // Add thinking indicator
     const thinkDiv = document.createElement('div');
     thinkDiv.className = 'msg ai';
-    thinkDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><div class="asb-thinking"><div class="ai-dots"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div><span>Analysing with live data…</span></div></div>`;
+    thinkDiv.innerHTML = `<div class="msg-label">StockMind AI</div><div class="bubble ai"><div class="asb-thinking"><div class="ai-dots"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div><span>Fetching live data & validating…</span></div></div>`;
     msgs.appendChild(thinkDiv);
     msgs.scrollTop = msgs.scrollHeight;
 
-    const response = await this.callGroqAI(prompt);
-    thinkDiv.remove();
+    try {
+      // ── STEP 1: Resolve ticker ────────────────────────────────────────────
+      // Check for Finnhub key first
+      if (!APP.finnhubKey) {
+        thinkDiv.querySelector('.bubble').innerHTML =
+          `<strong>⚠️ Finnhub key not found.</strong><br>Please sign out and sign back in to re-enter your API keys.`;
+        return;
+      }
 
-    if (response) {
+      const IGNORE = new Set(['AI','THE','FOR','AND','BUY','NOT','GET','CAN',
+        'USD','DAY','NOW','HOW','WHY','WHO','ARE','HAS','ITS','ALL','TOP',
+        'NEW','OLD','USE','ANY','ONE','TWO','MY','ME','IS','IT','IN','UP',
+        'DO','AT','BE','ANALYSE','ANALYZE','TELL','SHOW','WHAT','GIVE',
+        'STOCK','PRICE','DATA','INFO','ABOUT','TODAY','CURRENT','LATEST']);
+
+      // Extract explicit uppercase tickers (e.g. AAPL, MSFT)
+      const explicitTickers = [...new Set(
+        (msg.match(/\b[A-Z]{2,5}\b/g) || []).filter(t => !IGNORE.has(t))
+      )];
+
+      // Built-in common name map for instant resolution (no API call needed)
+      const NAME_MAP = {
+        apple:'AAPL', microsoft:'MSFT', google:'GOOGL', alphabet:'GOOGL',
+        nvidia:'NVDA', tesla:'TSLA', meta:'META', facebook:'META',
+        amazon:'AMZN', amd:'AMD', netflix:'NFLX', intel:'INTC',
+        disney:'DIS', nike:'NKE', spotify:'SPOT', uber:'UBER',
+        paypal:'PYPL', snap:'SNAP', snapchat:'SNAP', coinbase:'COIN',
+        shopify:'SHOP', twitter:'TWTR', salesforce:'CRM', oracle:'ORCL',
+        adobe:'ADBE', qualcomm:'QCOM', broadcom:'AVGO', tsmc:'TSM',
+        arm:'ARM', palantir:'PLTR', robinhood:'HOOD', rivian:'RIVN',
+        lucid:'LCID', ford:'F', gm:'GM', boeing:'BA', visa:'V',
+        mastercard:'MA', jpmorgan:'JPM', 'bank of america':'BAC',
+        goldman:'GS', berkshire:'BRK.B', walmart:'WMT', target:'TGT',
+        costco:'COST', mcdonalds:'MCD', starbucks:'SBUX', chipotle:'CMG',
+        pfizer:'PFE', moderna:'MRNA', johnson:'JNJ', eli lilly:'LLY',
+        lilly:'LLY', abbvie:'ABBV', exxon:'XOM', chevron:'CVX',
+        'coca cola':'KO', coke:'KO', pepsi:'PEP', pepsico:'PEP',
+      };
+
+      const msgLower = msg.toLowerCase();
+      const nameTickers = Object.entries(NAME_MAP)
+        .sort(([a],[b]) => b.length - a.length) // longest match first
+        .filter(([name]) => msgLower.includes(name))
+        .map(([,ticker]) => ticker);
+
+      // Combine explicit + name-matched tickers
+      let tickerMatch = [...new Set([...explicitTickers, ...nameTickers])].slice(0, 1);
+
+      // If still nothing found, try Finnhub search as fallback
+      if (tickerMatch.length === 0 && msg.trim().length > 2) {
+        try {
+          thinkDiv.querySelector('span').textContent = 'Searching for company…';
+          const sres  = await fetch(
+            `${CONFIG.BACKEND_URL}/search/${encodeURIComponent(msg.trim())}`,
+            { headers: { 'x-finnhub-key': APP.finnhubKey } }
+          );
+          if (sres.ok) {
+            const sjson = await sres.json();
+            if (sjson.success && sjson.data?.length > 0) {
+              tickerMatch = [sjson.data[0].symbol];
+            }
+          }
+        } catch(e) { console.warn('[Chat] Search failed:', e.message); }
+      }
+
+      // ── STEP 2: Fetch validated analysis data ──────────────────────────────
+      let analysisData = null;
+      let confidence   = null;
+
+      if (tickerMatch.length > 0) {
+        thinkDiv.querySelector('span').textContent = `Fetching live data for ${tickerMatch[0]}…`;
+        try {
+          const ares  = await fetch(
+            `${CONFIG.BACKEND_URL}/analyse/${tickerMatch[0]}`,
+            { headers: { 'x-finnhub-key': APP.finnhubKey } }
+          );
+          if (!ares.ok) throw new Error(`Backend error ${ares.status}`);
+          const ajson = await ares.json();
+          if (ajson.success) {
+            analysisData = ajson.data;
+            confidence   = ajson.data.confidence;
+          } else {
+            console.warn('[Chat] Analyse failed:', ajson.error?.message);
+          }
+        } catch(e) {
+          console.warn('[Chat] Analyse fetch error:', e.message);
+          // Show helpful message instead of silent fail
+          thinkDiv.querySelector('.bubble').innerHTML =
+            `<strong>⚠️ Could not reach backend</strong><br><br>` +
+            `The server may be waking up (takes ~30 seconds on free tier).<br>` +
+            `Please wait a moment and try again.<br><br>` +
+            `<small style="color:var(--tx3)">Error: ${e.message}</small>`;
+          return;
+        }
+      }
+
+      // ── STEP 3: Check data quality ────────────────────────────────────────
+      if (analysisData && !analysisData.dataQuality?.canAnalyse) {
+        thinkDiv.querySelector('.bubble').innerHTML =
+          `<strong>⚠️ Insufficient data for ${analysisData.symbol}</strong><br><br>` +
+          `Data quality: ${analysisData.dataQuality?.score || 0}%<br>` +
+          `${analysisData.errors?.join('<br>') || 'Data unavailable'}<br><br>` +
+          `Please try again in a moment.`;
+        return;
+      }
+
+      // ── STEP 4: Build validated prompt ────────────────────────────────────
+      const prompt = this.buildAnalysisPrompt(msg, analysisData, confidence);
+
+      // ── STEP 5: Call Groq AI ──────────────────────────────────────────────
+      document.getElementById('groqStatus').textContent = 'thinking…';
+      document.getElementById('groqStatus').style.color = 'var(--am)';
+
+      const groqRes = await fetch(CONFIG.GROQ_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${APP.groqKey}` },
+        body: JSON.stringify({
+          model: CONFIG.GROQ_MODEL, max_tokens: 600, temperature: 0.2,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+
+      document.getElementById('groqStatus').textContent = 'ready';
+      document.getElementById('groqStatus').style.color = 'var(--gn)';
+
+      if (!groqRes.ok) {
+        const ed = await groqRes.json().catch(() => ({}));
+        throw new Error(ed.error?.message || `Groq error ${groqRes.status}`);
+      }
+
+      const groqData = await groqRes.json();
+      const result   = groqData.choices?.[0]?.message?.content || 'No response.';
+
+      // ── STEP 6: Render result ─────────────────────────────────────────────
+      thinkDiv.remove();
+
+      const confBadge = confidence
+        ? `<div style="margin-top:10px;padding:6px 10px;background:var(--s2);border-radius:4px;font-size:9px;color:var(--tx3)">📊 Confidence: <strong style="color:${confidence.score >= 75 ? 'var(--gn)' : confidence.score >= 50 ? 'var(--am)' : 'var(--rd)'}">${confidence.score}%</strong> · Data: ${analysisData?.quote?._meta?.freshness || 'unknown'} · Not financial advice</div>`
+        : '<div style="margin-top:8px;font-size:9px;color:var(--tx3)">⚠ Not financial advice</div>';
+
       const aiDiv = document.createElement('div');
       aiDiv.className = 'msg ai';
-      // Render markdown-lite
-      const rendered = response
+      const rendered = result
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/^#{1,3} (.+)$/gm, '<strong>$1</strong>')
         .replace(/\n/g, '<br>');
-      aiDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">${rendered}</div>`;
+      aiDiv.innerHTML = `<div class="msg-label">StockMind AI</div><div class="bubble ai">${rendered}${confBadge}</div>`;
       msgs.appendChild(aiDiv);
       msgs.scrollTop = msgs.scrollHeight;
+
+      // Save to history
+      if (analysisData?.symbol) this.saveAnalysis(analysisData.symbol, result);
+      if (analysisData?.symbol) this.addSidebarSignal(analysisData.symbol, result);
+
+    } catch(e) {
+      console.error('[Chat] Error:', e);
+      document.getElementById('groqStatus').textContent = 'error';
+      document.getElementById('groqStatus').style.color = 'var(--rd)';
+      thinkDiv.querySelector('.bubble').innerHTML =
+        `<strong>❌ Error:</strong> ${e.message}<br><br>Check your API keys and try again.`;
     }
   },
 
-  clearChat() {
+  buildAnalysisPrompt(userMessage, analysisData, confidence) {
+    if (!analysisData || !analysisData.quote) {
+      return `You are StockMind AI, a professional financial assistant.
+The user asked: "${userMessage}"
+Live market data is not available right now. Tell the user:
+- If they asked about a specific company, live data could not be fetched
+- The backend server may still be waking up (takes ~30 seconds first time)
+- They should try again in a moment
+Do NOT guess any prices, metrics, or financial data. Keep response under 50 words.`;
+    }
+
+    const { quote, profile, metrics, news, symbol } = analysisData;
+    const conf = confidence || { score: 0, label: 'Low' };
+    const f    = (v, s = '') => v != null && v !== 0 ? `${Number(v).toFixed(2)}${s}` : 'N/A';
+
+    return `You are StockMind AI — institutional-grade financial analysis engine.
+
+VERIFIED DATA FOR: ${symbol} | Confidence: ${conf.score}% (${conf.label})
+
+LIVE PRICE (${quote._meta?.freshness || 'recent'}): $${quote.c?.toFixed(2)} | Change: ${quote.dp >= 0 ? '+' : ''}${quote.dp?.toFixed(2)}% | High: $${quote.h?.toFixed(2)} | Low: $${quote.l?.toFixed(2)} | Prev Close: $${quote.pc?.toFixed(2)}
+
+${profile ? `COMPANY: ${profile.name} | ${profile.finnhubIndustry || 'N/A'} | ${profile.exchange || 'N/A'} | Cap: ${profile.marketCapitalization ? '$' + (profile.marketCapitalization/1000).toFixed(1) + 'B' : 'N/A'}` : 'COMPANY: Not available — do not fabricate'}
+
+${metrics && Object.keys(metrics).length > 3 ? `METRICS: P/E=${f(metrics.peTTM)} | EPS=${f(metrics.epsTTM,'$')} | RevGrowth=${f(metrics['revenueGrowthTTMYoy'],'%')} | Margin=${f(metrics.grossMarginTTM,'%')} | Beta=${f(metrics.beta)} | 52W High=${f(metrics['52WeekHigh'],'$')} | 52W Low=${f(metrics['52WeekLow'],'$')} | ROE=${f(metrics.roeTTM,'%')}` : 'METRICS: Not available — do not fabricate any ratios'}
+
+${news?.length > 0 ? `NEWS: ${news.slice(0,3).map(n => n.headline).join(' | ')}` : 'NEWS: None available'}
+
+RULES: Only use data above. Never invent metrics. Only give BUY/HOLD/SELL if price+PE+revenue are all present. Be concise (max 220 words). End: "⚠ Confidence: ${conf.score}% | Not financial advice"
+
+USER: ${userMessage}`;
+  },
+
+    clearChat() {
     document.getElementById('chatMsgs').innerHTML = `
       <div class="msg ai">
         <div class="msg-label">StockMind AI Pro</div>
@@ -2379,19 +2578,30 @@ No live price data was found for a specific stock. Answer generally or ask the u
         continue;
       }
 
-      const prompt = `${r.symbol} is at $${r.quote.c?.toFixed(2)} (${r.quote.dp?.toFixed(2)}% today). High: $${r.quote.h?.toFixed(2)}, Low: $${r.quote.l?.toFixed(2)}. Give a 1-sentence BUY/HOLD/SELL signal with a reason.`;
-      const signal = await this.callGroqAI(prompt);
+      // Only generate signal if we have a valid price
+      if (!r.quote?.c) {
+        card.innerHTML = `<div class="sig-head"><div class="sig-sym">${r.symbol}</div><div style="color:var(--tx3)">NO DATA</div></div><div class="sig-note">Live data unavailable</div>`;
+        continue;
+      }
 
-      const verdict = signal?.includes('BUY') ? 'BUY' : signal?.includes('SELL') ? 'SELL' : 'HOLD';
+      const prompt = `${r.symbol} current price: $${r.quote.c?.toFixed(2)} (${r.quote.dp >= 0 ? '+' : ''}${r.quote.dp?.toFixed(2)}% today). Day range: $${r.quote.l?.toFixed(2)}-$${r.quote.h?.toFixed(2)}. Previous close: $${r.quote.pc?.toFixed(2)}.
+
+Give ONE sentence: start with BUY, HOLD, or SELL then explain why based only on this price data. Max 20 words. Do not mention any metrics you don't have.`;
+
+      const signal  = await this.callGroqAI(prompt);
+      const verdict = signal?.toUpperCase().startsWith('BUY')  ? 'BUY'
+                    : signal?.toUpperCase().startsWith('SELL') ? 'SELL' : 'HOLD';
       const colors  = { BUY: 'var(--gn)', SELL: 'var(--rd)', HOLD: 'var(--am)' };
+      const reliability = r.quote?._meta?.reliability || 'unknown';
 
       card.innerHTML = `
         <div class="sig-head">
           <div class="sig-sym">${r.symbol}</div>
           <div style="color:${colors[verdict]};font-weight:700;font-size:12px">${verdict}</div>
         </div>
-        <div class="sig-price">$${r.quote.c?.toFixed(2)} <span style="color:${r.quote.d >= 0 ? 'var(--gn)' : 'var(--rd)'};">${r.quote.d >= 0 ? '+' : ''}${r.quote.dp?.toFixed(2)}%</span></div>
-        <div class="sig-note">${signal?.substring(0, 100) || '—'}</div>`;
+        <div class="sig-price">$${r.quote.c?.toFixed(2)} <span style="color:${r.quote.d >= 0 ? 'var(--gn)' : 'var(--rd)'}">${r.quote.d >= 0 ? '+' : ''}${r.quote.dp?.toFixed(2)}%</span></div>
+        <div class="sig-note">${signal?.substring(0, 120) || '—'}</div>
+        <div style="font-size:9px;color:var(--tx3);margin-top:4px">Data: ${reliability} · ${r.quote._meta?.freshness || 'recent'}</div>`;
 
       this.addSidebarSignal(r.symbol, verdict);
     }
