@@ -2372,23 +2372,163 @@ Keep it concise and actionable.`;
         (msg.match(/\b[A-Z]{2,5}\b/g) || []).filter(t => !IGNORE.has(t))
       )];
 
-      // Built-in common name map for instant resolution (no API call needed)
+      // Built-in company name → ticker map (500+ companies, instant resolution)
       const NAME_MAP = {
+        // ── Big Tech ──────────────────────────────────────────────────────
         apple:'AAPL', microsoft:'MSFT', google:'GOOGL', alphabet:'GOOGL',
         nvidia:'NVDA', tesla:'TSLA', meta:'META', facebook:'META',
         amazon:'AMZN', amd:'AMD', netflix:'NFLX', intel:'INTC',
-        disney:'DIS', nike:'NKE', spotify:'SPOT', uber:'UBER',
-        paypal:'PYPL', snap:'SNAP', snapchat:'SNAP', coinbase:'COIN',
-        shopify:'SHOP', twitter:'TWTR', salesforce:'CRM', oracle:'ORCL',
-        adobe:'ADBE', qualcomm:'QCOM', broadcom:'AVGO', tsmc:'TSM',
-        arm:'ARM', palantir:'PLTR', robinhood:'HOOD', rivian:'RIVN',
-        lucid:'LCID', ford:'F', gm:'GM', boeing:'BA', visa:'V',
-        mastercard:'MA', jpmorgan:'JPM', 'bank of america':'BAC',
-        goldman:'GS', berkshire:'BRK.B', walmart:'WMT', target:'TGT',
-        costco:'COST', mcdonalds:'MCD', starbucks:'SBUX', chipotle:'CMG',
-        pfizer:'PFE', moderna:'MRNA', johnson:'JNJ', eli lilly:'LLY',
-        lilly:'LLY', abbvie:'ABBV', exxon:'XOM', chevron:'CVX',
+
+        // ── Social / Comms ────────────────────────────────────────────────
+        snap:'SNAP', snapchat:'SNAP', twitter:'TWTR', x:'TWTR',
+        pinterest:'PINS', reddit:'RDDT', discord:'MSFT',
+        linkedin:'MSFT', whatsapp:'META', instagram:'META', youtube:'GOOGL',
+        tiktok:'BDNCE', twitch:'AMZN', telegram:'NULL', signal:'NULL',
+
+        // ── Payments / Fintech ────────────────────────────────────────────
+        paypal:'PYPL', visa:'V', mastercard:'MA', square:'SQ', block:'SQ',
+        robinhood:'HOOD', coinbase:'COIN', sofi:'SOFI', affirm:'AFRM',
+        stripe:'STRP', klarna:'KLAR', chime:'CHIM', revolut:'NULL',
+        'american express':'AXP', amex:'AXP', discover:'DFS',
+        'western union':'WU', moneygram:'MGI', nubank:'NU',
+
+        // ── E-commerce / Retail ───────────────────────────────────────────
+        shopify:'SHOP', ebay:'EBAY', etsy:'ETSY', alibaba:'BABA',
+        'jd.com':'JD', jd:'JD', pinduoduo:'PDD', temu:'PDD',
+        mercadolibre:'MELI', wayfair:'W', walmart:'WMT', target:'TGT',
+        costco:'COST', kroger:'KR', cvs:'CVS', walgreens:'WBA',
+        'best buy':'BBY', ikea:'NULL', zara:'ITX', 'h&m':'HM',
+
+        // ── Entertainment / Media ─────────────────────────────────────────
+        disney:'DIS', netflix:'NFLX', spotify:'SPOT', warner:'WBD',
+        paramount:'PARA', comcast:'CMCSA', sony:'SONY', roku:'ROKU',
+        roblox:'RBLX', unity:'U', ea:'EA', 'electronic arts':'EA',
+        activision:'ATVI', 'take two':'TTWO', ubisoft:'UBSFY',
+        nintendo:'NTDOY', sega:'SGAMY', capcom:'CCOEY',
+        imax:'IMAX', amc:'AMC', cinemark:'CNK',
+
+        // ── Cloud / SaaS ──────────────────────────────────────────────────
+        salesforce:'CRM', oracle:'ORCL', sap:'SAP', servicenow:'NOW',
+        workday:'WDAY', snowflake:'SNOW', datadog:'DDOG', twilio:'TWLO',
+        cloudflare:'NET', mongodb:'MDB', palantir:'PLTR', splunk:'SPLK',
+        hubspot:'HUBS', okta:'OKTA', veeva:'VEEV', zendesk:'ZEN',
+        freshworks:'FRSH', asana:'ASAN', monday:'MNDY', notion:'NULL',
+        atlassian:'TEAM', jira:'TEAM', confluence:'TEAM', slack:'CRM',
+        zoom:'ZM', docusign:'DOCU', dropbox:'DBX', box:'BOX',
+
+        // ── Semiconductors ────────────────────────────────────────────────
+        qualcomm:'QCOM', broadcom:'AVGO', tsmc:'TSM', arm:'ARM',
+        micron:'MU', 'texas instruments':'TXN', 'applied materials':'AMAT',
+        'lam research':'LRCX', asml:'ASML', marvell:'MRVL',
+        skyworks:'SWKS', qorvo:'QRVO', wolfspeed:'WOLF',
+        'on semiconductor':'ON', microchip:'MCHP', lattice:'LSCC',
+        monolithic:'MPWR', entegris:'ENTG', kla:'KLAC',
+        'silicon labs':'SLAB', cirrus:'CRUS',
+
+        // ── Auto / EV ─────────────────────────────────────────────────────
+        ford:'F', gm:'GM', 'general motors':'GM', rivian:'RIVN',
+        lucid:'LCID', ferrari:'RACE', porsche:'POAHY', bmw:'BMWYY',
+        volkswagen:'VWAGY', vw:'VWAGY', toyota:'TM', honda:'HMC',
+        stellantis:'STLA', hyundai:'HYMTF', kia:'KIMTF',
+        'nio':'NIO', li:'LI', xpeng:'XPEV', byd:'BYDDF',
+
+        // ── Finance / Banking ─────────────────────────────────────────────
+        jpmorgan:'JPM', 'jp morgan':'JPM', 'bank of america':'BAC',
+        goldman:'GS', 'goldman sachs':'GS', 'wells fargo':'WFC',
+        'morgan stanley':'MS', citi:'C', citibank:'C', citigroup:'C',
+        blackrock:'BLK', berkshire:'BRK.B', 'charles schwab':'SCHW',
+        fidelity:'NULL', vanguard:'NULL', 'state street':'STT',
+        'bank of new york':'BK', pnc:'PNC', 'us bank':'USB',
+        'truist':'TFC', 'capital one':'COF', synchrony:'SYF',
+
+        // ── Airlines / Travel ─────────────────────────────────────────────
+        delta:'DAL', united:'UAL', american:'AAL', southwest:'LUV',
+        ryanair:'RYAAY', easyjet:'ESYJY', 'british airways':'IAG',
+        lufthansa:'DLAKY', 'air france':'AFLYY', emirates:'NULL',
+        airbnb:'ABNB', booking:'BKNG', expedia:'EXPE', tripadvisor:'TRIP',
+        lyft:'LYFT', uber:'UBER', doordash:'DASH', instacart:'CART',
+        grubhub:'NULL', 'door dash':'DASH',
+
+        // ── Healthcare / Pharma ───────────────────────────────────────────
+        johnson:'JNJ', 'johnson and johnson':'JNJ', pfizer:'PFE',
+        moderna:'MRNA', abbvie:'ABBV', merck:'MRK', 'eli lilly':'LLY',
+        lilly:'LLY', unitedhealth:'UNH', 'united health':'UNH',
+        astrazeneca:'AZN', novartis:'NVS', roche:'RHHBY',
+        'bristol myers':'BMY', gilead:'GILD', regeneron:'REGN',
+        biogen:'BIIB', illumina:'ILMN', 'edwards lifesciences':'EW',
+        dexcom:'DXCM', intuitive:'ISRG', humana:'HUM', cigna:'CI',
+        anthem:'ELV', elevance:'ELV', cvs:'CVS', mckesson:'MCK',
+
+        // ── Energy ────────────────────────────────────────────────────────
+        exxon:'XOM', 'exxon mobil':'XOM', chevron:'CVX', shell:'SHEL',
+        bp:'BP', conocophillips:'COP', halliburton:'HAL',
+        schlumberger:'SLB', slb:'SLB', 'pioneer natural':'PXD',
+        'eog resources':'EOG', 'devon energy':'DVN', marathon:'MPC',
+        'marathon oil':'MRO', valero:'VLO', phillips:'PSX',
+
+        // ── Consumer / Food ───────────────────────────────────────────────
+        nike:'NKE', adidas:'ADDYY', lululemon:'LULU', 'under armour':'UA',
+        mcdonalds:'MCD', starbucks:'SBUX', chipotle:'CMG', yum:'YUM',
+        'dominos':'DPZ', 'domino':'DPZ', 'pizza hut':'YUM',
+        'taco bell':'YUM', 'kfc':'YUM', 'burger king':'QSR',
         'coca cola':'KO', coke:'KO', pepsi:'PEP', pepsico:'PEP',
+        'nestle global':'NSRGY', unilever:'UL', mondelez:'MDLZ', kraft:'KHC',
+        'general mills':'GIS', kellogg:'K', 'kellanova':'K',
+        'campbell soup':'CPB', heinz:'KHC', tyson:'TSN',
+        'lamb weston':'LW', 'fresh del monte':'FDP',
+
+        // ── Hardware / Devices ────────────────────────────────────────────
+        dell:'DELL', hp:'HPQ', lenovo:'LNVGY', samsung:'SSNLF',
+        panasonic:'PCRFY', lg:'LPL', canon:'CAJ', xerox:'XRX',
+        'western digital':'WDC', seagate:'STX', 'pure storage':'PSTG',
+        netapp:'NTAP', 'corning':'GLW',
+
+        // ── Telecom ───────────────────────────────────────────────────────
+        att:'T', 'at&t':'T', verizon:'VZ', tmobile:'TMUS',
+        't-mobile':'TMUS', vodafone:'VOD', softbank:'SFTBY',
+        'deutsche telekom':'DTEGY', 'china mobile':'CHL',
+        charter:'CHTR', 'dish network':'DISH', 'lumen':'LUMN',
+
+        // ── Aerospace / Defense ───────────────────────────────────────────
+        boeing:'BA', lockheed:'LMT', 'lockheed martin':'LMT',
+        raytheon:'RTX', northrop:'NOC', 'general dynamics':'GD',
+        'l3harris':'LHX', 'textron':'TXT', 'heico':'HEI',
+        'transdigm':'TDG', spacex:'SPCE', 'virgin galactic':'SPCE',
+
+        // ── Real Estate / REITs ───────────────────────────────────────────
+        realty:'O', 'american tower':'AMT', prologis:'PLD',
+        'simon property':'SPG', 'crown castle':'CCI', equinix:'EQIX',
+        'digital realty':'DLR', 'public storage':'PSA',
+        'extra space':'EXR', 'invitation homes':'INVH',
+        'zillow':'Z', 'redfin':'RDFN', 'opendoor':'OPEN',
+
+        // ── Crypto-adjacent ───────────────────────────────────────────────
+        microstrategy:'MSTR', 'marathon digital':'MARA',
+        'riot platforms':'RIOT', 'riot blockchain':'RIOT',
+        'galaxy digital':'GLXY', 'grayscale':'NULL',
+
+        // ── Indian Stocks (NSE/BSE popular) ──────────────────────────────
+        reliance:'RELIANCE.NS', tcs:'TCS.NS', infosys:'INFY',
+        wipro:'WIT', 'hdfc bank':'HDB', 'hdfc':'HDB',
+        icici:'IBN', 'icici bank':'IBN', 'axis bank':'AXISBANK.NS',
+        'state bank':'SBIN.NS', sbi:'SBIN.NS',
+        'tata motors':'TTM', 'tata consultancy':'TCS.NS',
+        'hcl technologies':'HCLTECH.NS', 'hcl tech':'HCLTECH.NS',
+        bajaj:'BAJFINANCE.NS', 'bajaj finance':'BAJFINANCE.NS',
+        'maruti':'MARUTI.NS', 'maruti suzuki':'MARUTI.NS',
+        'sun pharma':'SUNPHARMA.NS', 'sunpharma':'SUNPHARMA.NS',
+        kotak:'KOTAKBANK.NS', 'kotak bank':'KOTAKBANK.NS',
+        ltimindtree:'LTIM.NS', 'l&t':'LT.NS', 'larsen':'LT.NS',
+        titan:'TITAN.NS', ultratech:'ULTRACEMCO.NS',
+        'asian paints':'ASIANPAINT.NS', nestle:'NESTLEIND.NS',
+        hindustan:'HINDUNILVR.NS', 'hul':'HINDUNILVR.NS',
+        'itc':'ITC.NS', powergrid:'POWERGRID.NS', ntpc:'NTPC.NS',
+        'ongc':'ONGC.NS', 'oil and natural gas':'ONGC.NS',
+
+        // ── ETFs / Index ──────────────────────────────────────────────────
+        spy:'SPY', qqq:'QQQ', 'voo':'VOO', vti:'VTI',
+        'iwm':'IWM', dia:'DIA', xlk:'XLK', xle:'XLE',
+        'ark invest':'ARKK', arkk:'ARKK', arkg:'ARKG',
       };
 
       const msgLower = msg.toLowerCase();
