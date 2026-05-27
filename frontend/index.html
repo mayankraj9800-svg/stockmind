@@ -661,17 +661,179 @@ html, body {
 #toast.error   { border-color: rgba(255,77,109,.4); color: var(--rd); }
 
 /* ── RESPONSIVE ────────────────────────────────────────── */
+/* Global overflow guard */
+html { overflow-x: hidden; }
+body { overflow-x: hidden; max-width: 100vw; }
+* { max-width: 100%; }
+img, video, iframe { max-width: 100%; }
+
 @media(max-width:900px) {
   .sb { display: none; }
   #panel-chart .chart-layout { grid-template-columns: 1fr; }
   .chart-sidebar { display: none; }
   .chat-ctx { display: none; }
+  .chat-layout { grid-template-columns: 1fr; }
+  .g2 { grid-template-columns: 1fr; }
+  .brief-grid { grid-template-columns: 1fr; }
 }
 @media(max-width:680px) {
-  .topbar { padding: 0 10px; }
+  .topbar { padding: 0 10px; gap: 6px; }
   .ticker-bar { display: none; }
-  .panel-scroll { padding: 12px; }
+  .panel-scroll { padding: 10px 12px; }
+  .chat-input-row { padding: 8px 10px; gap: 6px; }
+  .q-chips { padding: 6px 10px; gap: 4px; flex-wrap: wrap; }
+  .wl-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .heatmap-container { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
+  .brand small { display: none; }
+  .fh-sep, #backendLatency { display: none; }
+  .fa-hero h2 { font-size: clamp(14px,4vw,20px); }
+  .msg { max-width: 96%; }
+  .bubble { font-size: 11px; padding: 8px 10px; }
+  .ai-section { padding: 7px 10px; }
+  .ai-sec-body { font-size: 11px; }
+  .fr2 { grid-template-columns: 1fr; }
+  .cmp-inputs { grid-template-columns: 1fr; }
+  .port-add-row { flex-direction: column; align-items: stretch; }
+  .fa-actions { flex-direction: column; align-items: stretch; }
+  .fa-actions button { width: 100%; justify-content: center; }
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tabs::-webkit-scrollbar { height: 0; }
+  .tab { min-width: max-content; font-size: 9px; padding: 0 10px; }
+  .topbar-right .btn-icon:not(#signOutBtn) { display: none; }
+  .setup-inner { width: 100%; max-width: 480px; }
+  .setup-card { padding: 20px 18px; border-radius: 12px; }
 }
+@media(max-width:420px) {
+  .wl-grid { grid-template-columns: 1fr 1fr; }
+  .pw-meta { grid-template-columns: 1fr 1fr; }
+  .tab { font-size: 8px; padding: 0 8px; height: 34px; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   PHASE 5/6 — NEW COMPONENTS
+══════════════════════════════════════════════════════════ */
+
+/* ── INVESTOR MODE SELECTOR ────────────────────────────── */
+.mode-bar {
+  display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 14px;
+  border-bottom: 1px solid var(--border); background: var(--bg2); flex-shrink: 0; overflow-x: auto;
+}
+.mode-bar::-webkit-scrollbar { height: 0; }
+.mode-chip {
+  display: flex; align-items: center; gap: 5px; padding: 4px 12px;
+  border-radius: 20px; border: 1px solid var(--border); background: var(--s1);
+  font-size: 9px; font-weight: 600; color: var(--tx3); cursor: pointer;
+  font-family: 'Syne', sans-serif; letter-spacing: .05em; white-space: nowrap;
+  transition: all .15s; user-select: none;
+}
+.mode-chip:hover { border-color: var(--border2); color: var(--tx2); }
+.mode-chip.active {
+  background: rgba(0,212,170,.12); border-color: rgba(0,212,170,.4);
+  color: var(--ac); box-shadow: 0 0 10px rgba(0,212,170,.1);
+}
+
+/* ── SCANNER PANEL ─────────────────────────────────────── */
+.scanner-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px; padding: 16px 20px;
+}
+.scanner-card {
+  background: var(--s1); border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden; transition: border-color .2s;
+}
+.scanner-card:hover { border-color: var(--border2); }
+.sc-head {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg2);
+}
+.sc-title { font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700; color: var(--tx); }
+.sc-badge { font-size: 8px; font-weight: 700; padding: 2px 8px; border-radius: 10px; letter-spacing: .06em; }
+.sc-badge.bull { background: rgba(0,212,170,.15); color: var(--gn); border: 1px solid rgba(0,212,170,.25); }
+.sc-badge.bear { background: rgba(255,77,109,.15); color: var(--rd); border: 1px solid rgba(255,77,109,.25); }
+.sc-badge.neut { background: rgba(255,184,48,.15); color: var(--am); border: 1px solid rgba(255,184,48,.25); }
+.sc-body { padding: 12px 14px; min-height: 80px; }
+.sc-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 10px;
+}
+.sc-item:last-child { border-bottom: none; }
+.sc-sym { font-weight: 700; color: var(--tx); font-family: 'Syne', sans-serif; font-size: 11px; }
+.sc-signal { font-size: 9px; color: var(--tx2); flex: 1; padding: 0 8px; }
+.sc-val { font-weight: 600; font-size: 10px; }
+.sc-val.up { color: var(--gn); }
+.sc-val.dn { color: var(--rd); }
+.sc-val.neu { color: var(--am); }
+
+/* ── ALERTS PANEL ──────────────────────────────────────── */
+.alerts-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px 20px;
+}
+@media(max-width:680px) { .alerts-grid { grid-template-columns: 1fr; } }
+.alert-card {
+  background: var(--s1); border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px;
+}
+.alert-item {
+  display: flex; align-items: center; justify-content: space-between; padding: 8px 0;
+  border-bottom: 1px solid var(--border); font-size: 10px;
+}
+.alert-item:last-child { border-bottom: none; }
+.alert-sym { font-family: 'Syne', sans-serif; font-weight: 700; color: var(--tx); }
+.alert-cond { font-size: 9px; color: var(--tx2); flex: 1; padding: 0 8px; }
+.alert-status { font-size: 8px; font-weight: 700; padding: 2px 7px; border-radius: 8px; }
+.alert-status.active  { background: rgba(0,212,170,.1); color: var(--gn); border: 1px solid rgba(0,212,170,.2); }
+.alert-status.triggered { background: rgba(255,184,48,.1); color: var(--am); border: 1px solid rgba(255,184,48,.2); }
+.alert-add-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+.alert-notification {
+  position: fixed; top: 56px; right: 16px; z-index: 9000;
+  background: var(--s1); border: 1px solid rgba(255,184,48,.4); border-radius: 10px;
+  padding: 12px 16px; font-size: 11px; color: var(--am); max-width: 280px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6); transform: translateX(120%); transition: transform .3s;
+}
+.alert-notification.show { transform: translateX(0); }
+.alert-notification strong { color: var(--tx); display: block; margin-bottom: 3px; }
+
+/* ── WATCHLIST AI SCORES ───────────────────────────────── */
+.wl-score-bar {
+  display: flex; gap: 4px; margin-top: 6px;
+}
+.wl-score-pill {
+  font-size: 8px; font-weight: 700; padding: 2px 6px; border-radius: 8px;
+  letter-spacing: .04em;
+}
+.wl-opp   { background: rgba(0,212,170,.12); color: var(--gn); border: 1px solid rgba(0,212,170,.2); }
+.wl-risk  { background: rgba(255,77,109,.12); color: var(--rd); border: 1px solid rgba(255,77,109,.2); }
+
+/* ── PORTFOLIO SCORE ───────────────────────────────────── */
+.port-health {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px; margin-bottom: 14px;
+}
+.port-health-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; text-align: center;
+}
+.phc-label { font-size: 8px; color: var(--tx3); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 4px; }
+.phc-val { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; }
+.phc-val.good { color: var(--gn); }
+.phc-val.warn { color: var(--am); }
+.phc-val.bad  { color: var(--rd); }
+
+/* ── OPPORTUNITY DETECTION ─────────────────────────────── */
+.opp-feed {
+  display: flex; flex-direction: column; gap: 8px; padding: 0 20px 20px;
+}
+.opp-card {
+  background: var(--s1); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 15px; display: flex; align-items: center; gap: 12px;
+  transition: border-color .15s;
+}
+.opp-card:hover { border-color: var(--ac); }
+.opp-icon { font-size: 20px; flex-shrink: 0; }
+.opp-body { flex: 1; min-width: 0; }
+.opp-title { font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 700; color: var(--tx); margin-bottom: 2px; }
+.opp-desc { font-size: 10px; color: var(--tx2); line-height: 1.5; }
+.opp-score { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; color: var(--ac); flex-shrink: 0; }
 
 /* ── SCROLLBARS ────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -910,6 +1072,8 @@ html, body {
     <div class="tab"    id="tab-wl"        data-tab="wl">       <span class="tab-icon">⭐</span>Watchlist</div>
     <div class="tab"    id="tab-portfolio" data-tab="portfolio"><span class="tab-icon">💼</span>Portfolio</div>
     <div class="tab"    id="tab-brief"     data-tab="brief">    <span class="tab-icon">📰</span>Daily Brief</div>
+    <div class="tab"    id="tab-scanner"   data-tab="scanner"> <span class="tab-icon">🔭</span>AI Scanner</div>
+    <div class="tab"    id="tab-alerts"    data-tab="alerts">  <span class="tab-icon">🔔</span>Alerts</div>
     <div class="tab"    id="tab-fa"        data-tab="fa">       <span class="tab-icon">🔬</span>Buy/Sell</div>
     <div class="tab"    id="tab-cmp"       data-tab="cmp">      <span class="tab-icon">⚖</span>Compare</div>
     <div class="tab"    id="tab-heatmap"   data-tab="heatmap">  <span class="tab-icon">🟩</span>Heatmap</div>
@@ -1056,6 +1220,18 @@ html, body {
 
     <!-- ══ PANEL: AI CHAT ══════════════════════════════════ -->
     <div class="panel" id="panel-chat">
+      <!-- Investor Mode Selector -->
+      <div class="mode-bar" id="modeBar">
+        <span style="font-size:9px;color:var(--tx3);font-weight:700;letter-spacing:.1em;text-transform:uppercase;align-self:center;white-space:nowrap">AI MODE:</span>
+        <div class="mode-chip active" data-mode="balanced">⚖️ Balanced</div>
+        <div class="mode-chip" data-mode="longterm">🌱 Long-Term</div>
+        <div class="mode-chip" data-mode="swing">📈 Swing Trader</div>
+        <div class="mode-chip" data-mode="conservative">🛡️ Conservative</div>
+        <div class="mode-chip" data-mode="aggressive">🚀 Aggressive</div>
+        <div class="mode-chip" data-mode="value">💎 Value</div>
+        <div class="mode-chip" data-mode="momentum">⚡ Momentum</div>
+        <div class="mode-chip" data-mode="dividend">💰 Dividend</div>
+      </div>
       <div class="chat-layout">
         <div class="chat-main">
           <div class="chat-msgs" id="chatMsgs">
@@ -1306,6 +1482,104 @@ html, body {
     </div>
 
     <!-- ══ PANEL: HEATMAP ══════════════════════════════════ -->
+    <!-- ══ PANEL: AI SCANNER ════════════════════════════════ -->
+    <div class="panel" id="panel-scanner">
+      <div class="panel-header">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800">🔭 AI Market Scanner</div>
+          <div style="font-size:9px;color:var(--tx3);margin-top:2px">Live signal detection across key US & Indian stocks</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-gen" id="scanBtn" onclick="APP.runScanner()">⚡ Run AI Scan</button>
+          <button class="btn-outline" onclick="APP.clearScanner()">Clear</button>
+        </div>
+      </div>
+      <div style="overflow-y:auto;flex:1">
+        <div class="scanner-grid" id="scannerGrid">
+          <div class="scanner-card">
+            <div class="sc-head"><span class="sc-title">🟢 Bullish Setups</span><span class="sc-badge bull" id="sc-bull-cnt">—</span></div>
+            <div class="sc-body" id="sc-bull">
+              <div style="color:var(--tx3);font-size:10px;padding:16px 0;text-align:center">Click "Run AI Scan" to detect opportunities</div>
+            </div>
+          </div>
+          <div class="scanner-card">
+            <div class="sc-head"><span class="sc-title">🔴 Bearish Signals</span><span class="sc-badge bear" id="sc-bear-cnt">—</span></div>
+            <div class="sc-body" id="sc-bear">
+              <div style="color:var(--tx3);font-size:10px;padding:16px 0;text-align:center">Click "Run AI Scan" to detect risks</div>
+            </div>
+          </div>
+          <div class="scanner-card">
+            <div class="sc-head"><span class="sc-title">⚡ Momentum Leaders</span><span class="sc-badge bull" id="sc-mom-cnt">—</span></div>
+            <div class="sc-body" id="sc-mom">
+              <div style="color:var(--tx3);font-size:10px;padding:16px 0;text-align:center">Momentum detection runs on scan</div>
+            </div>
+          </div>
+          <div class="scanner-card">
+            <div class="sc-head"><span class="sc-title">🎯 Oversold Opportunities</span><span class="sc-badge neut" id="sc-osl-cnt">—</span></div>
+            <div class="sc-body" id="sc-osl">
+              <div style="color:var(--tx3);font-size:10px;padding:16px 0;text-align:center">RSI-based oversold detection</div>
+            </div>
+          </div>
+          <div class="scanner-card">
+            <div class="sc-head"><span class="sc-title">⚠️ High Volatility</span><span class="sc-badge bear" id="sc-vol-cnt">—</span></div>
+            <div class="sc-body" id="sc-vol">
+              <div style="color:var(--tx3);font-size:10px;padding:16px 0;text-align:center">Intraday volatility detection</div>
+            </div>
+          </div>
+          <div class="scanner-card">
+            <div class="sc-head"><span class="sc-title">🤖 AI Watchlist Picks</span><span class="sc-badge bull" id="sc-ai-cnt">—</span></div>
+            <div class="sc-body" id="sc-ai">
+              <div style="color:var(--tx3);font-size:10px;padding:16px 0;text-align:center">AI-ranked watchlist candidates</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ PANEL: ALERTS ══════════════════════════════════ -->
+    <div class="panel" id="panel-alerts">
+      <div class="panel-header">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800">🔔 AI Alerts Engine</div>
+          <div style="font-size:9px;color:var(--tx3);margin-top:2px">Set intelligent price, RSI & momentum alerts. Checked live when you trigger a scan.</div>
+        </div>
+        <button class="btn-outline" onclick="APP.checkAllAlerts()">▶ Check All Now</button>
+      </div>
+      <div style="overflow-y:auto;flex:1;padding:16px 20px">
+        <!-- Add alert row -->
+        <div class="alert-card" style="margin-bottom:12px">
+          <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx3);margin-bottom:10px;font-weight:700">➕ Create New Alert</div>
+          <div class="alert-add-row">
+            <input class="fi" id="alertTicker" placeholder="Ticker e.g. AAPL" style="width:100px;text-transform:uppercase"/>
+            <select class="fs" id="alertType" style="flex:1;min-width:140px">
+              <option value="price_above">Price rises above $</option>
+              <option value="price_below">Price falls below $</option>
+              <option value="change_up">Day gain exceeds %</option>
+              <option value="change_down">Day loss exceeds %</option>
+              <option value="rsi_overbought">RSI overbought (75+)</option>
+              <option value="rsi_oversold">RSI oversold (25−)</option>
+            </select>
+            <input class="fi" id="alertValue" placeholder="Value" type="number" style="width:80px"/>
+            <button class="btn-add" onclick="APP.addAlert()">+ Add Alert</button>
+          </div>
+        </div>
+        <!-- Active alerts list -->
+        <div class="alert-card">
+          <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx3);margin-bottom:10px;font-weight:700">📋 Active Alerts</div>
+          <div id="alertsList">
+            <div style="color:var(--tx3);font-size:10px;text-align:center;padding:20px 0">No alerts set — create one above</div>
+          </div>
+        </div>
+        <!-- Triggered notifications log -->
+        <div class="alert-card" style="margin-top:12px">
+          <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx3);margin-bottom:10px;font-weight:700">🔔 Triggered Log</div>
+          <div id="alertLog">
+            <div style="color:var(--tx3);font-size:10px;text-align:center;padding:20px 0">No alerts triggered yet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="panel" id="panel-heatmap">
       <div style="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--s1);display:flex;align-items:center;justify-content:space-between">
         <div>
@@ -1336,6 +1610,7 @@ html, body {
 </div><!-- /#app -->
 
 <div id="toast"></div>
+<div class="alert-notification" id="alertNotif"></div>
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1395,17 +1670,28 @@ const ApiClient = {
   },
 
   async _post(path, body) {
-    const url  = `${CONFIG.BACKEND_URL}${path}`;
-    const res  = await fetch(url, {
-      method: 'POST', headers: this._headers(), body: JSON.stringify(body),
-    });
-    const json = await res.json();
-    if (!json.success) {
-      const e = new Error(json.error?.message || `Backend error ${res.status}`);
-      e.status = res.status;
-      throw e;
+    // ── BUG FIX: _post had no retry logic unlike _get; add same retry pattern ──
+    const url = `${CONFIG.BACKEND_URL}${path}`;
+    let lastError;
+    for (let attempt = 0; attempt <= CONFIG.MAX_RETRIES; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, CONFIG.RETRY_DELAY_MS * attempt));
+      try {
+        const res  = await fetch(url, {
+          method: 'POST', headers: this._headers(), body: JSON.stringify(body),
+        });
+        const json = await res.json();
+        if (!json.success) {
+          const e = new Error(json.error?.message || `Backend error ${res.status}`);
+          e.status = res.status;
+          throw e;
+        }
+        return json.data;
+      } catch(e) {
+        lastError = e;
+        if (e.status && e.status >= 400 && e.status < 500) break; // don't retry 4xx
+      }
     }
-    return json.data;
+    throw lastError;
   },
 
   async quote(symbol) {
@@ -1462,6 +1748,8 @@ const APP = {
   finnhubKey: '',
   backendOk:  false,
   currentUser: null,
+  investorMode: 'balanced',  // Current AI investor mode
+  alerts: [],                // Active price/RSI alerts array
 
   // ── SESSION MEMORY SYSTEM ─────────────────────────────────────────────────
   // Short-term conversational memory for multi-turn financial context
@@ -1792,6 +2080,9 @@ const APP = {
     this.initTicker();
     this.startHealthMonitor();
     this.runHealthCheck();
+    // Phase 5/6 — init new systems
+    this.initInvestorMode();
+    this.loadUserPreferences();
   },
 
   // ── SIGN OUT ──────────────────────────────────────────────────────────────
@@ -2033,6 +2324,8 @@ const APP = {
     if (tabName === 'heatmap')   this.loadHeatmap();
     if (tabName === 'brief')     this.setDate();
     if (tabName === 'history')   this.loadHistory();
+    if (tabName === 'scanner')   {} // Scanner runs on button click
+    if (tabName === 'alerts')    this.renderAlerts();
   },
 
   // ── TRADINGVIEW CHART ─────────────────────────────────────────────────────
@@ -2204,19 +2497,28 @@ Max 100 words.`;
       document.getElementById('groqStatus').textContent = 'thinking…';
       document.getElementById('groqStatus').style.color = 'var(--am)';
 
-      const res = await fetch(CONFIG.GROQ_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.groqKey}`,
-          'Content-Type':  'application/json',
-        },
-        body: JSON.stringify({
-          model:       CONFIG.GROQ_MODEL,
-          messages:    [{ role: 'user', content: prompt }],
-          max_tokens:  1200,
-          temperature: 0.65,
-        }),
-      });
+      // ── BUG FIX: add 30s timeout — previously could hang forever ──
+      const groqController = new AbortController();
+      const groqTimeout = setTimeout(() => groqController.abort(), 30000);
+      let res;
+      try {
+        res = await fetch(CONFIG.GROQ_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.groqKey}`,
+            'Content-Type':  'application/json',
+          },
+          body: JSON.stringify({
+            model:       CONFIG.GROQ_MODEL,
+            messages:    [{ role: 'user', content: prompt }],
+            max_tokens:  1200,
+            temperature: 0.65,
+          }),
+          signal: groqController.signal,
+        });
+      } finally {
+        clearTimeout(groqTimeout);
+      }
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -2284,7 +2586,11 @@ Max 100 words.`;
     if (!banner) return;
     const now   = new Date();
     const utc   = now.getUTCHours() * 60 + now.getUTCMinutes();
-    const etOff = now.toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short' }) === now.toLocaleString('en-US', { weekday: 'short' }) ? -240 : -300;
+    // ── BUG FIX: previous DST detection compared two mismatched locale strings,
+    // giving wrong ET offset half the year. Use Intl to get actual ET hour. ──
+    const etHour = parseInt(now.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }), 10);
+    const utcHour = now.getUTCHours();
+    const etOff = (etHour - utcHour) * 60; // actual offset in minutes (e.g. -300 or -240)
     const etMin = ((utc + etOff + 1440) % 1440);
     const usOpen   = etMin >= 570 && etMin <= 960; // 9:30–16:00 ET
     const inOpen   = utc  >= 225 && utc  <= 585;   // 3:45–9:45 UTC
@@ -2612,6 +2918,23 @@ Max 220 words. State "Insufficient data" for any section where notes are inadequ
     const curr = document.getElementById('portCurr').value || 'USD';
     if (!sym || !qty || !avg) { this.toast('Fill all portfolio fields'); return; }
 
+    // ── BUG FIX: duplicate symbol causes colliding portrow-{sym} IDs → only
+    // last position would update. Merge into existing position instead. ──
+    const existing = this.state.portfolio.find(p => p.symbol === sym);
+    if (existing) {
+      // Merge: weighted average cost, combined quantity
+      const totalQty = existing.qty + qty;
+      existing.avg = ((existing.avg * existing.qty) + (avg * qty)) / totalQty;
+      existing.qty = totalQty;
+      this.persistState();
+      document.getElementById('portSym').value = '';
+      document.getElementById('portQty').value = '';
+      document.getElementById('portAvg').value = '';
+      this.refreshPortfolio();
+      this.toast(`✅ Merged ${sym} position (avg cost updated)`);
+      return;
+    }
+
     this.state.portfolio.push({ symbol: sym, qty, avg, currency: curr });
     this.persistState();
     document.getElementById('portSym').value = '';
@@ -2770,11 +3093,33 @@ Max 250 words. Only reference the positions and data listed above.`;
         setThinkText(`Continuing analysis of ${this.memory.activeEntity}…`);
       }
 
-      const IGNORE = new Set(['AI','THE','FOR','AND','BUY','NOT','GET','CAN',
+      const IGNORE = new Set([
+        // Common words
+        'AI','THE','FOR','AND','BUY','NOT','GET','CAN',
         'USD','DAY','NOW','HOW','WHY','WHO','ARE','HAS','ITS','ALL','TOP',
         'NEW','OLD','USE','ANY','ONE','TWO','MY','ME','IS','IT','IN','UP',
         'DO','AT','BE','ANALYSE','ANALYZE','TELL','SHOW','WHAT','GIVE',
-        'STOCK','PRICE','DATA','INFO','ABOUT','TODAY','CURRENT','LATEST']);
+        'STOCK','PRICE','DATA','INFO','ABOUT','TODAY','CURRENT','LATEST',
+        // ── RESERVED FINANCIAL TERMS (Section 15) ─────────────────────
+        // Technical indicators
+        'RSI','MACD','EMA','SMA','VWAP','ATR','ADX','CCI','OBV','SAR',
+        'BB','BOLL','STOCH','DMI','AROON','MFI','ROC','TRIX',
+        // Fundamental metrics
+        'PEG','EPS','ROE','ROA','ROIC','ROI','DCF','FCF','EBITDA',
+        'PE','PB','PS','PD','EV','NI','TTM','YOY','QOQ','MOM',
+        'NAV','NTA','BPS','DPS','NFO','AUM','XIRR','CAGR',
+        // Market terms
+        'ETF','IPO','FPO','OFS','NFO','SIP','MF','PMS','AIF',
+        'GDP','CPI','WPI','PMI','IIP','REPO','SLR','CRR','PLR','MCLR',
+        'FDI','FII','DII','FPI','QIB','HNI','RII',
+        // Chart patterns
+        'OHLCV','OHLC','HLC','HLCC','HL','LH',
+        // General finance
+        'BULL','BEAR','LONG','SHORT','CALL','PUT','SWAP','BOND',
+        'NIFTY','SENSEX','BSE','NSE','MCX','SEBI','RBI','IRDAI',
+        'NYSE','NASDAQ','AMEX','LSE','TSX','ASX','SGX','HKX',
+        'YTD','MTD','QTD','FYTD','52W','52WH','52WL',
+      ]);
 
       // Extract explicit uppercase tickers (e.g. AAPL, MSFT)
       const explicitTickers = [...new Set(
@@ -2916,28 +3261,115 @@ Max 250 words. Only reference the positions and data listed above.`;
         'riot platforms':'RIOT', 'riot blockchain':'RIOT',
         'galaxy digital':'GLXY', 'grayscale':'NULL',
 
-        // ── Indian Stocks (NSE/BSE popular) ──────────────────────────────
-        reliance:'RELIANCE.NS', tcs:'TCS.NS', infosys:'INFY',
-        wipro:'WIT', 'hdfc bank':'HDB', 'hdfc':'HDB',
-        icici:'IBN', 'icici bank':'IBN', 'axis bank':'AXISBANK.NS',
-        'state bank':'SBIN.NS', sbi:'SBIN.NS',
-        'tata motors':'TTM', 'tata consultancy':'TCS.NS',
-        'hcl technologies':'HCLTECH.NS', 'hcl tech':'HCLTECH.NS',
-        bajaj:'BAJFINANCE.NS', 'bajaj finance':'BAJFINANCE.NS',
-        'maruti':'MARUTI.NS', 'maruti suzuki':'MARUTI.NS',
-        'sun pharma':'SUNPHARMA.NS', 'sunpharma':'SUNPHARMA.NS',
-        kotak:'KOTAKBANK.NS', 'kotak bank':'KOTAKBANK.NS',
-        ltimindtree:'LTIM.NS', 'l&t':'LT.NS', 'larsen':'LT.NS',
-        titan:'TITAN.NS', ultratech:'ULTRACEMCO.NS',
-        'asian paints':'ASIANPAINT.NS', nestle:'NESTLEIND.NS',
-        hindustan:'HINDUNILVR.NS', 'hul':'HINDUNILVR.NS',
-        'itc':'ITC.NS', powergrid:'POWERGRID.NS', ntpc:'NTPC.NS',
-        'ongc':'ONGC.NS', 'oil and natural gas':'ONGC.NS',
+        // ── Indian Stocks — Banking ───────────────────────────────────────
+        'hdfc bank':'HDFCBANK.NS','hdfcbank':'HDFCBANK.NS',
+        'icici bank':'ICICIBANK.NS','icicibank':'ICICIBANK.NS','icici':'ICICIBANK.NS',
+        'state bank':'SBIN.NS','sbi':'SBIN.NS','state bank of india':'SBIN.NS',
+        'axis bank':'AXISBANK.NS','axisbank':'AXISBANK.NS',
+        'kotak bank':'KOTAKBANK.NS','kotakbank':'KOTAKBANK.NS','kotak':'KOTAKBANK.NS',
+        'punjab national':'PNB.NS','pnb':'PNB.NS',
+        'bank of baroda':'BANKBARODA.NS','bob':'BANKBARODA.NS',
+        'canara bank':'CANARABANK.NS','canara':'CANARABANK.NS',
+        'indusind':'INDUSINDBK.NS','indusind bank':'INDUSINDBK.NS',
+        'yes bank':'YESBANK.NS','yesbank':'YESBANK.NS',
+        'federal bank':'FEDERALBNK.NS','au bank':'AUBANK.NS',
+        'idfc first':'IDFCFIRSTB.NS','idfc':'IDFCFIRSTB.NS',
+        'rbl bank':'RBLBANK.NS','rbl':'RBLBANK.NS',
+        'bandhan bank':'BANDHANBNK.NS','bandhan':'BANDHANBNK.NS',
+        // ── Indian IT ────────────────────────────────────────────────────────
+        'tcs':'TCS.NS','tata consultancy':'TCS.NS',
+        'infosys':'INFY.NS','infy':'INFY.NS',
+        'wipro':'WIPRO.NS',
+        'hcl tech':'HCLTECH.NS','hcltech':'HCLTECH.NS','hcl technologies':'HCLTECH.NS',
+        'tech mahindra':'TECHM.NS','techm':'TECHM.NS',
+        'ltimindtree':'LTIM.NS','lti mindtree':'LTIM.NS',
+        'mphasis':'MPHASIS.NS','persistent':'PERSISTENT.NS','coforge':'COFORGE.NS',
+        // ── Indian Energy ─────────────────────────────────────────────────────
+        'reliance':'RELIANCE.NS','reliance industries':'RELIANCE.NS','ril':'RELIANCE.NS',
+        'ongc':'ONGC.NS','oil and natural gas':'ONGC.NS',
+        'indian oil':'IOC.NS','ioc':'IOC.NS',
+        'bpcl':'BPCL.NS','bharat petroleum':'BPCL.NS',
+        'hpcl':'HPCL.NS','hindustan petroleum':'HPCL.NS',
+        'tata power':'TATAPOWER.NS','tatapower':'TATAPOWER.NS',
+        'adani enterprises':'ADANIENT.NS','adanient':'ADANIENT.NS',
+        'adani ports':'ADANIPORTS.NS','adaniports':'ADANIPORTS.NS',
+        'adani green':'ADANIGREEN.NS','adani total gas':'ATGL.NS','atgl':'ATGL.NS',
+        'power grid':'POWERGRID.NS','powergrid':'POWERGRID.NS',
+        'ntpc':'NTPC.NS','coal india':'COALINDIA.NS','coalindia':'COALINDIA.NS',
+        'ireda':'IREDA.NS','nhpc':'NHPC.NS','sjvn':'SJVN.NS',
+        // ── Indian Auto ───────────────────────────────────────────────────────
+        'tata motors':'TATAMOTORS.NS','tatamotors':'TATAMOTORS.NS',
+        'maruti':'MARUTI.NS','maruti suzuki':'MARUTI.NS',
+        'mahindra':'MM.NS','m&m':'MM.NS','mahindra and mahindra':'MM.NS',
+        'bajaj auto':'BAJAJ-AUTO.NS','bajajauto':'BAJAJ-AUTO.NS',
+        'hero motocorp':'HEROMOTOCO.NS','hero moto':'HEROMOTOCO.NS',
+        'eicher motors':'EICHERMOT.NS','eicher':'EICHERMOT.NS',
+        'tvs motor':'TVSMOTOR.NS','tvs':'TVSMOTOR.NS',
+        'ashok leyland':'ASHOKLEY.NS','bosch':'BOSCHLTD.NS',
+        // ── Indian Finance / NBFC ─────────────────────────────────────────────
+        'bajaj finance':'BAJFINANCE.NS','bajfinance':'BAJFINANCE.NS','bajaj':'BAJFINANCE.NS',
+        'bajaj finserv':'BAJAJFINSV.NS','bajajfinsv':'BAJAJFINSV.NS',
+        'lic':'LICI.NS','lici':'LICI.NS','life insurance corporation':'LICI.NS',
+        'hdfc life':'HDFCLIFE.NS','sbi life':'SBILIFE.NS',
+        'icici prudential':'ICICIPRULI.NS','icici lombard':'ICICIGI.NS',
+        'muthoot finance':'MUTHOOTFIN.NS','muthoot':'MUTHOOTFIN.NS',
+        'cholamandalam':'CHOLAFIN.NS','chola':'CHOLAFIN.NS',
+        'shriram finance':'SHRIRAMFIN.NS','shriram':'SHRIRAMFIN.NS',
+        'lic housing':'LICHSGFIN.NS',
+        // ── Indian Consumer / FMCG ────────────────────────────────────────────
+        'itc':'ITC.NS',
+        'hindustan unilever':'HINDUNILVR.NS','hul':'HINDUNILVR.NS','hindustan':'HINDUNILVR.NS',
+        'nestle india':'NESTLEIND.NS','nestle':'NESTLEIND.NS',
+        'britannia':'BRITANNIA.NS','dabur':'DABUR.NS',
+        'godrej consumer':'GODREJCP.NS','godrej':'GODREJCP.NS',
+        'colgate':'COLPAL.NS','marico':'MARICO.NS','emami':'EMAMILTD.NS',
+        'tata consumer':'TATACONSUM.NS','varun beverages':'VBL.NS',
+        // ── Indian Pharma ─────────────────────────────────────────────────────
+        'sun pharma':'SUNPHARMA.NS','sunpharma':'SUNPHARMA.NS',
+        'cipla':'CIPLA.NS','dr reddys':'DRREDDY.NS','drreddy':'DRREDDY.NS',
+        'divis':'DIVISLAB.NS','lupin':'LUPIN.NS',
+        'torrent pharma':'TORNTPHARM.NS','aurobindo':'AUROPHARMA.NS',
+        'zydus':'ZYDUSLIFE.NS','mankind pharma':'MANKIND.NS',
+        'apollo hospitals':'APOLLOHOSP.NS','apollo':'APOLLOHOSP.NS',
+        'max healthcare':'MAXHEALTH.NS','fortis':'FORTIS.NS',
+        // ── Indian Infra / PSU ────────────────────────────────────────────────
+        'l&t':'LT.NS','larsen':'LT.NS','larsen and toubro':'LT.NS',
+        'irctc':'IRCTC.NS','rvnl':'RVNL.NS','rail vikas':'RVNL.NS',
+        'irfc':'IRFC.NS','bhel':'BHEL.NS','bharat heavy':'BHEL.NS',
+        'abb':'ABB.NS','siemens india':'SIEMENS.NS',
+        'havells':'HAVELLS.NS','polycab':'POLYCAB.NS',
+        'bharat electronics':'BEL.NS','bel':'BEL.NS',
+        'hal':'HAL.NS','hindustan aeronautics':'HAL.NS',
+        'mazagon dock':'MAZDOCK.NS','ircon':'IRCON.NS','rites':'RITES.NS',
+        // ── Indian Cement / Materials ─────────────────────────────────────────
+        'ultratech':'ULTRACEMCO.NS','ultratech cement':'ULTRACEMCO.NS',
+        'shree cement':'SHREECEM.NS','acc':'ACC.NS','ambuja':'AMBUJACEM.NS',
+        'tata steel':'TATASTEEL.NS','jsw steel':'JSWSTEEL.NS','jsw':'JSWSTEEL.NS',
+        'sail':'SAIL.NS','hindalco':'HINDALCO.NS','vedanta':'VEDL.NS','nmdc':'NMDC.NS',
+        // ── Indian Telecom ────────────────────────────────────────────────────
+        'airtel':'BHARTIARTL.NS','bharti airtel':'BHARTIARTL.NS',
+        'vodafone idea':'IDEA.NS','vi':'IDEA.NS','idea':'IDEA.NS',
+        'indus towers':'INDUSTOWER.NS',
+        // ── Indian New-age ────────────────────────────────────────────────────
+        'zomato':'ZOMATO.NS','paytm':'PAYTM.NS','nykaa':'NYKAA.NS',
+        'delhivery':'DELHIVERY.NS','policybazaar':'POLICYBZR.NS',
+        'swiggy':'SWIGGY.NS','ixigo':'IXIGO.NS',
+        // ── Indian Retail / Real Estate ───────────────────────────────────────
+        'titan':'TITAN.NS',
+        'asian paints':'ASIANPAINT.NS','asianpaint':'ASIANPAINT.NS',
+        'pidilite':'PIDILITIND.NS','berger paints':'BERGEPAINT.NS',
+        'dmart':'DMART.NS','avenue supermarts':'DMART.NS',
+        'trent':'TRENT.NS','dlf':'DLF.NS','lodha':'LODHA.NS',
+        'godrej properties':'GODREJPROP.NS','oberoi realty':'OBEROIRLTY.NS',
+        // ── Indian Midcap / Theme ─────────────────────────────────────────────
+        'suzlon':'SUZLON.NS','indigo':'INDIGO.NS','interglobe':'INDIGO.NS',
+        'spicejet':'SPICEJET.NS','irb':'IRB.NS',
+        'kalyan jewellers':'KALYANKJIL.NS',
 
         // ── ETFs / Index ──────────────────────────────────────────────────
-        spy:'SPY', qqq:'QQQ', 'voo':'VOO', vti:'VTI',
-        'iwm':'IWM', dia:'DIA', xlk:'XLK', xle:'XLE',
-        'ark invest':'ARKK', arkk:'ARKK', arkg:'ARKG',
+        'spy':'SPY','qqq':'QQQ','voo':'VOO','vti':'VTI',
+        'iwm':'IWM','dia':'DIA','xlk':'XLK','xle':'XLE',
+        'ark invest':'ARKK','arkk':'ARKK','arkg':'ARKG',
       };
 
       const msgLower = msg.toLowerCase();
@@ -3062,14 +3494,23 @@ Max 250 words. Only reference the positions and data listed above.`;
       document.getElementById('groqStatus').textContent = 'thinking…';
       document.getElementById('groqStatus').style.color = 'var(--am)';
 
-      const groqRes = await fetch(CONFIG.GROQ_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${APP.groqKey}` },
-        body: JSON.stringify({
-          model: CONFIG.GROQ_MODEL, max_tokens: 800, temperature: 0.2,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
+      // ── BUG FIX: add 30s timeout to chat Groq fetch ──
+      const chatController = new AbortController();
+      const chatGroqTimeout = setTimeout(() => chatController.abort(), 30000);
+      let groqRes;
+      try {
+        groqRes = await fetch(CONFIG.GROQ_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${APP.groqKey}` },
+          body: JSON.stringify({
+            model: CONFIG.GROQ_MODEL, max_tokens: 800, temperature: 0.2,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+          signal: chatController.signal,
+        });
+      } finally {
+        clearTimeout(chatGroqTimeout);
+      }
 
       if (!groqRes.ok) {
         const ed = await groqRes.json().catch(() => ({}));
@@ -3594,7 +4035,23 @@ Do NOT guess any prices, metrics, or financial data. Keep response under 50 word
       ? `P/E(TTM)=${f(metrics.peTTM)}x | FwdP/E=${fwdPE ? f(fwdPE)+'x' : 'N/A'} | PEG=${peg ? f(peg) : 'N/A'} | EPS=$${f(metrics.epsTTM)} | RevGrowth=${f(metrics['revenueGrowthTTMYoy'],'%')} | EarningsGrowth=${egr ? f(egr,'%') : 'N/A'} | GrossMargin=${f(metrics.grossMarginTTM,'%')} | ROE=${f(metrics.roeTTM,'%')} | ${targetStr}`
       : 'VALUATION: Metrics unavailable — do not fabricate any ratios';
 
+    // Investor mode context injection
+    const modeContexts = {
+      balanced:     'Analyse objectively. Balance growth, value, and risk.',
+      longterm:     'Focus on 3–5 year fundamentals, compounding potential, and durable competitive advantages. Deprioritize short-term volatility.',
+      swing:        'Focus on 5–20 day momentum, technical setups, and entry/exit points. Include support/resistance context.',
+      conservative: 'Prioritize capital preservation. Flag all risks prominently. Prefer defensive, dividend-paying stocks.',
+      aggressive:   'Focus on high-growth potential and momentum catalysts. Accept higher volatility for higher returns.',
+      value:        'Emphasise intrinsic value vs current price. Use P/E, P/B, FCF yield, and margin of safety concepts.',
+      momentum:     'Focus on relative strength, price momentum, and sector rotation signals.',
+      dividend:     'Emphasise dividend yield, payout ratio, dividend growth history, and income sustainability.',
+    };
+    const modeCtx = modeContexts[APP.investorMode] || modeContexts.balanced;
+    const modeLabel = APP.investorMode.charAt(0).toUpperCase() + APP.investorMode.slice(1);
+
     return `You are StockMind AI — institutional-grade financial analysis engine. Respond ONLY in the structured format below. Be concise, analytical, and evidence-based. Zero filler.
+
+AI INVESTOR MODE: ${modeLabel} — ${modeCtx}
 
 ═══════════════════════════════════════
 VERIFIED DATA PACKAGE: ${symbol}
@@ -3663,54 +4120,66 @@ USER QUERY: ${userMessage}`;
   async generateSignals() {
     const symbols = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'META', 'AMZN'];
     const feed    = document.getElementById('signalFeed');
+    const btn     = document.getElementById('genSignalsBtn');
+
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Fetching data…'; }
 
     // Show loading skeletons
     feed.innerHTML = symbols.map(sym =>
       `<div class="signal-item shimmer" id="sig-${sym}" style="min-height:100px"></div>`
     ).join('');
 
-    const results = await ApiClient.batchQuotes(symbols);
+    try {
+      const results = await ApiClient.batchQuotes(symbols);
 
-    for (const r of results) {
-      const card = document.getElementById(`sig-${r.symbol}`);
-      if (!card) continue;
-      card.classList.remove('shimmer');
+      // ── BUG FIX: run all Groq calls in parallel instead of sequentially ──
+      // Previously each callGroqAI() was awaited inside a for-loop, causing 7
+      // sequential round-trips (30–60+ seconds) that froze the entire UI.
+      await Promise.all(results.map(async (r) => {
+        const card = document.getElementById(`sig-${r.symbol}`);
+        if (!card) return;
+        card.classList.remove('shimmer');
 
-      if (!r.quote) {
-        card.innerHTML = `<div class="sig-head"><div class="sig-sym">${r.symbol}</div><div style="color:var(--rd)">ERR</div></div><div class="sig-note">${r.error}</div>`;
-        continue;
-      }
+        if (!r.quote) {
+          card.innerHTML = `<div class="sig-head"><div class="sig-sym">${r.symbol}</div><div style="color:var(--rd)">ERR</div></div><div class="sig-note">${r.error || 'Data unavailable'}</div>`;
+          return;
+        }
 
-      // Only generate signal if we have a valid price
-      if (!r.quote?.c) {
-        card.innerHTML = `<div class="sig-head"><div class="sig-sym">${r.symbol}</div><div style="color:var(--tx3)">NO DATA</div></div><div class="sig-note">Live data unavailable</div>`;
-        continue;
-      }
+        if (!r.quote?.c) {
+          card.innerHTML = `<div class="sig-head"><div class="sig-sym">${r.symbol}</div><div style="color:var(--tx3)">NO DATA</div></div><div class="sig-note">Live data unavailable</div>`;
+          return;
+        }
 
-      // Compute intraday technicals for richer signal
-      const sigTech = this.computeTechnicals(null, r.quote);
-      const sigRisk = this.calculateRisk(null, r.quote, sigTech);
+        const sigTech = this.computeTechnicals(null, r.quote);
+        const sigRisk = this.calculateRisk(null, r.quote, sigTech);
 
-      const prompt = `You are StockMind AI — institutional signal engine. ${r.symbol}: Price $${r.quote.c?.toFixed(2)} | Day: ${r.quote.dp >= 0 ? '+' : ''}${r.quote.dp?.toFixed(2)}% | Range: $${r.quote.l?.toFixed(2)}–$${r.quote.h?.toFixed(2)} | Prev: $${r.quote.pc?.toFixed(2)} | ${sigTech.rsiNote || ''} | Risk: ${sigRisk.level}
+        const prompt = `You are StockMind AI — institutional signal engine. ${r.symbol}: Price $${r.quote.c?.toFixed(2)} | Day: ${r.quote.dp >= 0 ? '+' : ''}${r.quote.dp?.toFixed(2)}% | Range: $${r.quote.l?.toFixed(2)}–$${r.quote.h?.toFixed(2)} | Prev: $${r.quote.pc?.toFixed(2)} | ${sigTech.rsiNote || ''} | Risk: ${sigRisk.level}
 
 Start with BUY, HOLD, or SELL. One sentence (max 25 words). Cite the specific price data above. No invented metrics.`;
 
-      const signal  = await this.callGroqAI(prompt);
-      const verdict = signal?.toUpperCase().startsWith('BUY')  ? 'BUY'
-                    : signal?.toUpperCase().startsWith('SELL') ? 'SELL' : 'HOLD';
-      const colors  = { BUY: 'var(--gn)', SELL: 'var(--rd)', HOLD: 'var(--am)' };
-      const reliability = r.quote?._meta?.reliability || 'unknown';
+        const signal  = await this.callGroqAI(prompt);
+        const verdict = signal?.toUpperCase().startsWith('BUY')  ? 'BUY'
+                      : signal?.toUpperCase().startsWith('SELL') ? 'SELL' : 'HOLD';
+        const colors  = { BUY: 'var(--gn)', SELL: 'var(--rd)', HOLD: 'var(--am)' };
+        const reliability = r.quote?._meta?.reliability || 'unknown';
 
-      card.innerHTML = `
-        <div class="sig-head">
-          <div class="sig-sym">${r.symbol}</div>
-          <div style="color:${colors[verdict]};font-weight:700;font-size:12px">${verdict}</div>
-        </div>
-        <div class="sig-price">$${r.quote.c?.toFixed(2)} <span style="color:${r.quote.d >= 0 ? 'var(--gn)' : 'var(--rd)'}">${r.quote.d >= 0 ? '+' : ''}${r.quote.dp?.toFixed(2)}%</span></div>
-        <div class="sig-note">${signal?.substring(0, 120) || '—'}</div>
-        <div style="font-size:9px;color:var(--tx3);margin-top:4px">Data: ${reliability} · ${r.quote._meta?.freshness || 'recent'}</div>`;
+        card.innerHTML = `
+          <div class="sig-head">
+            <div class="sig-sym">${r.symbol}</div>
+            <div style="color:${colors[verdict]};font-weight:700;font-size:12px">${verdict}</div>
+          </div>
+          <div class="sig-price">$${r.quote.c?.toFixed(2)} <span style="color:${r.quote.d >= 0 ? 'var(--gn)' : 'var(--rd)'}">${r.quote.d >= 0 ? '+' : ''}${r.quote.dp?.toFixed(2)}%</span></div>
+          <div class="sig-note">${signal?.substring(0, 120) || '—'}</div>
+          <div style="font-size:9px;color:var(--tx3);margin-top:4px">Data: ${reliability} · ${r.quote._meta?.freshness || 'recent'}</div>`;
 
-      this.addSidebarSignal(r.symbol, verdict);
+        this.addSidebarSignal(r.symbol, verdict);
+      }));
+    } catch(e) {
+      console.error('[generateSignals]', e);
+      feed.innerHTML = `<div style="padding:20px;color:var(--rd);font-size:11px;text-align:center">❌ Signal generation failed: ${e.message}</div>`;
+    } finally {
+      // ── BUG FIX: always re-enable button (was missing before) ──
+      if (btn) { btn.disabled = false; btn.textContent = '⚡ Generate Signals'; }
     }
   },
 
@@ -3762,6 +4231,7 @@ Start with BUY, HOLD, or SELL. One sentence (max 25 words). Cite the specific pr
     const btn = document.getElementById('briefBtn');
     btn.disabled = true; btn.textContent = '⏳ Fetching live data…';
 
+    try {
     const symbols = ['SPY', 'QQQ', 'DIA', 'AAPL', 'NVDA', 'MSFT', 'TSLA', 'META'];
     const results = await ApiClient.batchQuotes(symbols);
     const quotes  = Object.fromEntries(results.map(r => [r.symbol, r.quote]));
@@ -3814,6 +4284,14 @@ Max 300 words. Reference specific prices and % changes from the data above. Do n
     document.getElementById('briefBody').innerHTML     = this.formatAIResponse(result);
     document.getElementById('briefContent').style.display = 'block';
     document.getElementById('briefPdfBtn').style.display  = 'inline-block';
+    } catch(e) {
+      // ── BUG FIX: catch errors so btn doesn't stay frozen ──
+      console.error('[generateBrief]', e);
+      this.toast(`❌ Brief generation failed: ${e.message}`);
+    } finally {
+      // ── BUG FIX: always re-enable button (was missing before) ──
+      btn.disabled = false; btn.textContent = '📰 Generate Brief';
+    }
   },
 
   // ── PDF EXPORT ────────────────────────────────────────────────────────────
@@ -3846,6 +4324,246 @@ Max 300 words. Reference specific prices and % changes from the data above. Do n
       });
     }
     pdf.save(`StockMind-${section}-${new Date().toISOString().split('T')[0]}.pdf`);
+  },
+
+  // ── INVESTOR MODE SYSTEM ──────────────────────────────────────────────────
+  initInvestorMode() {
+    // ── BUG FIX: this function is called from both launchApp() and
+    // loadUserPreferences(), stacking duplicate event listeners on each chip.
+    // Clone each chip to wipe old listeners before attaching fresh ones. ──
+    document.querySelectorAll('.mode-chip').forEach(chip => {
+      const fresh = chip.cloneNode(true);
+      chip.parentNode.replaceChild(fresh, chip);
+    });
+    document.querySelectorAll('.mode-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('.mode-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        this.investorMode = chip.dataset.mode;
+        this.toast(`AI Mode: ${chip.textContent.trim()}`);
+        // Persist to Firestore if possible
+        this.saveUserData({ investorMode: this.investorMode }).catch(() => {});
+      });
+    });
+    // Restore saved mode
+    if (this.investorMode) {
+      document.querySelectorAll('.mode-chip').forEach(c => {
+        if (c.dataset.mode === this.investorMode) c.classList.add('active');
+        else c.classList.remove('active');
+      });
+    }
+  },
+
+  // ── AI MARKET SCANNER ─────────────────────────────────────────────────────
+  async runScanner() {
+    const btn = document.getElementById('scanBtn');
+    btn.disabled = true; btn.textContent = '⏳ Scanning…';
+
+    // Scan a curated cross-market universe
+    const symbols = ['AAPL','MSFT','NVDA','TSLA','GOOGL','META','AMZN','AMD',
+                     'NFLX','PYPL','SHOP','PLTR','COIN','SOFI','HOOD',
+                     'SPY','QQQ','DIA'];
+
+    const results = await ApiClient.batchQuotes(symbols);
+
+    const bull = [], bear = [], momentum = [], oversold = [], volatile = [], aiPicks = [];
+
+    for (const r of results) {
+      if (!r.quote?.c || !r.quote?.dp) continue;
+      const q  = r.quote;
+      const dp = q.dp;
+      const dayRange = q.h && q.l ? ((q.h - q.l) / q.c * 100) : 0;
+      const tech = this.computeTechnicals(null, q);
+
+      // Bullish: positive day + intraday strength
+      if (dp > 1.5) bull.push({ sym: r.symbol, val: dp, note: `+${dp.toFixed(1)}% today` });
+      // Bearish: significant decline
+      if (dp < -1.5) bear.push({ sym: r.symbol, val: dp, note: `${dp.toFixed(1)}% today` });
+      // Momentum: strong move + trending above open
+      if (Math.abs(dp) > 2.5 && q.c > q.o) momentum.push({ sym: r.symbol, val: dp, note: `Breakout +${dp.toFixed(1)}%` });
+      // Oversold proxy: significant drop + near day low
+      if (dp < -2 && q.c < (q.l + (q.h - q.l) * 0.2)) oversold.push({ sym: r.symbol, val: dp, note: `Near day low, ${dp.toFixed(1)}%` });
+      // Volatile: wide intraday range
+      if (dayRange > 3) volatile.push({ sym: r.symbol, val: dayRange, note: `Range ${dayRange.toFixed(1)}% of price` });
+    }
+
+    // AI picks: score by momentum + not overbought
+    const scored = results
+      .filter(r => r.quote?.c && Math.abs(r.quote.dp || 0) > 0.5)
+      .map(r => ({ sym: r.symbol, score: Math.abs(r.quote.dp), note: `${r.quote.dp >= 0 ? '+' : ''}${r.quote.dp?.toFixed(2)}%` }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5);
+    aiPicks.push(...scored);
+
+    // Render each category
+    const renderList = (items, containerId, cntId, cls) => {
+      const el  = document.getElementById(containerId);
+      const cnt = document.getElementById(cntId);
+      if (!items.length) {
+        el.innerHTML = `<div style="color:var(--tx3);font-size:10px;text-align:center;padding:10px 0">No signals detected</div>`;
+        cnt.textContent = '0';
+        return;
+      }
+      cnt.textContent = items.length;
+      el.innerHTML = items.slice(0, 6).map(i =>
+        `<div class="sc-item">
+          <span class="sc-sym">${i.sym}</span>
+          <span class="sc-signal">${i.note}</span>
+          <span class="sc-val ${cls}" style="cursor:pointer" onclick="document.getElementById('cin').value='Analyse ${i.sym}';APP.switchTab('chat');setTimeout(()=>APP.sendChat(),200)">${cls === 'up' ? '▲' : cls === 'dn' ? '▼' : '◆'}</span>
+        </div>`
+      ).join('');
+    };
+
+    renderList(bull.sort((a,b) => b.val-a.val),       'sc-bull', 'sc-bull-cnt', 'up');
+    renderList(bear.sort((a,b) => a.val-b.val),       'sc-bear', 'sc-bear-cnt', 'dn');
+    renderList(momentum.sort((a,b) => b.val-a.val),   'sc-mom',  'sc-mom-cnt',  'up');
+    renderList(oversold.sort((a,b) => a.val-b.val),   'sc-osl',  'sc-osl-cnt',  'neu');
+    renderList(volatile.sort((a,b) => b.val-a.val),   'sc-vol',  'sc-vol-cnt',  'dn');
+    renderList(aiPicks,                                'sc-ai',   'sc-ai-cnt',   'up');
+
+    btn.disabled = false; btn.textContent = '⚡ Run AI Scan';
+    this.toast(`✅ Scan complete — ${results.length} stocks analysed`);
+  },
+
+  clearScanner() {
+    ['sc-bull','sc-bear','sc-mom','sc-osl','sc-vol','sc-ai'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = `<div style="color:var(--tx3);font-size:10px;text-align:center;padding:16px 0">Click "Run AI Scan" to detect signals</div>`;
+    });
+    ['sc-bull-cnt','sc-bear-cnt','sc-mom-cnt','sc-osl-cnt','sc-vol-cnt','sc-ai-cnt'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '—';
+    });
+  },
+
+  // ── ALERTS ENGINE ─────────────────────────────────────────────────────────
+  addAlert() {
+    const ticker = document.getElementById('alertTicker').value.trim().toUpperCase();
+    const type   = document.getElementById('alertType').value;
+    const value  = parseFloat(document.getElementById('alertValue').value);
+
+    if (!ticker) { this.toast('Enter a ticker symbol'); return; }
+    if (['price_above','price_below','change_up','change_down'].includes(type) && isNaN(value)) {
+      this.toast('Enter a threshold value'); return;
+    }
+
+    const alert = { id: Date.now(), ticker, type, value, status: 'active', created: new Date().toLocaleTimeString() };
+    this.alerts.push(alert);
+    this.renderAlerts();
+
+    // Clear inputs
+    document.getElementById('alertTicker').value = '';
+    document.getElementById('alertValue').value  = '';
+    this.toast(`✅ Alert set for ${ticker}`);
+
+    // Persist
+    this.saveUserData({ alerts: this.alerts }).catch(() => {});
+  },
+
+  renderAlerts() {
+    const el = document.getElementById('alertsList');
+    if (!el) return;
+    if (!this.alerts.length) {
+      el.innerHTML = '<div style="color:var(--tx3);font-size:10px;text-align:center;padding:20px 0">No alerts set</div>';
+      return;
+    }
+    const typeLabels = {
+      price_above: 'Price above $', price_below: 'Price below $',
+      change_up: 'Day gain > ', change_down: 'Day loss > ',
+      rsi_overbought: 'RSI overbought (75+)', rsi_oversold: 'RSI oversold (25−)',
+    };
+    el.innerHTML = this.alerts.map(a => `
+      <div class="alert-item">
+        <span class="alert-sym">${a.ticker}</span>
+        <span class="alert-cond">${typeLabels[a.type] || a.type}${a.value != null && !isNaN(a.value) ? a.value : ''}</span>
+        <span class="alert-status ${a.status}">${a.status === 'triggered' ? '🔔 Triggered' : 'Active'}</span>
+        <button class="btn-sm" style="margin-left:8px" onclick="APP.removeAlert(${a.id})">✕</button>
+      </div>`
+    ).join('');
+  },
+
+  removeAlert(id) {
+    this.alerts = this.alerts.filter(a => a.id !== id);
+    this.renderAlerts();
+    this.saveUserData({ alerts: this.alerts }).catch(() => {});
+  },
+
+  async checkAllAlerts() {
+    if (!this.alerts.length) { this.toast('No alerts to check'); return; }
+    const symbols = [...new Set(this.alerts.map(a => a.ticker))];
+    const results = await ApiClient.batchQuotes(symbols);
+    const bySymbol = Object.fromEntries(results.map(r => [r.symbol, r.quote]));
+    const triggered = [];
+
+    for (const alert of this.alerts) {
+      if (alert.status === 'triggered') continue;
+      const q = bySymbol[alert.ticker];
+      if (!q) continue;
+      let fire = false;
+      if (alert.type === 'price_above'  && q.c > alert.value)           fire = true;
+      if (alert.type === 'price_below'  && q.c < alert.value)           fire = true;
+      if (alert.type === 'change_up'    && q.dp > alert.value)          fire = true;
+      if (alert.type === 'change_down'  && q.dp < -Math.abs(alert.value)) fire = true;
+      if (alert.type === 'rsi_overbought') {
+        const tech = this.computeTechnicals(null, q);
+        if (tech.rsi != null && tech.rsi >= 75) fire = true;
+      }
+      if (alert.type === 'rsi_oversold') {
+        const tech = this.computeTechnicals(null, q);
+        if (tech.rsi != null && tech.rsi <= 25) fire = true;
+      }
+      if (fire) {
+        alert.status = 'triggered';
+        triggered.push(`${alert.ticker}: ${alert.type.replace(/_/g,' ')} @ $${q.c?.toFixed(2)}`);
+      }
+    }
+
+    this.renderAlerts();
+    // Log triggered alerts
+    if (triggered.length) {
+      const logEl = document.getElementById('alertLog');
+      if (logEl) {
+        logEl.innerHTML = triggered.map(t =>
+          `<div class="alert-item"><span style="color:var(--am)">🔔 ${t}</span><span style="font-size:9px;color:var(--tx3)">${new Date().toLocaleTimeString()}</span></div>`
+        ).join('') + (logEl.innerHTML.includes('No alerts') ? '' : logEl.innerHTML);
+      }
+      this.showAlertNotification(triggered[0]);
+      this.toast(`🔔 ${triggered.length} alert(s) triggered!`);
+      this.saveUserData({ alerts: this.alerts }).catch(() => {});
+    } else {
+      this.toast('✅ All alerts checked — no triggers');
+    }
+  },
+
+  showAlertNotification(message) {
+    const el = document.getElementById('alertNotif');
+    if (!el) return;
+    el.innerHTML = `<strong>🔔 Alert Triggered</strong>${message}`;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 5000);
+  },
+
+  // ── LONG-TERM USER MEMORY — load investor preferences ────────────────────
+  async loadUserPreferences() {
+    if (!this.currentUser || !window.FB) return;
+    const { db, doc, getDoc } = window.FB;
+    try {
+      const snap = await getDoc(doc(db, 'users', this.currentUser.uid));
+      if (snap.exists()) {
+        const d = snap.data();
+        if (d.investorMode) {
+          this.investorMode = d.investorMode;
+          this.initInvestorMode();
+        }
+        if (d.alerts && Array.isArray(d.alerts)) {
+          // ── BUG FIX: was clobbering any alerts added before prefs loaded ──
+          const existingIds = new Set(this.alerts.map(a => a.id));
+          const merged = [...this.alerts, ...d.alerts.filter(a => !existingIds.has(a.id))];
+          this.alerts = merged;
+          this.renderAlerts();
+        }
+      }
+    } catch(e) { console.warn('[Memory] loadUserPreferences failed:', e.message); }
   },
 
   // ── TOAST ─────────────────────────────────────────────────────────────────
