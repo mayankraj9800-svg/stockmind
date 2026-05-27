@@ -678,6 +678,124 @@ html, body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--s4); }
+
+/* ══════════════════════════════════════════════════════════
+   PHASE 4 — BLOOMBERG-STYLE AI SECTION CARDS
+══════════════════════════════════════════════════════════ */
+.ai-section {
+  margin: 5px 0; border-radius: 8px; padding: 8px 12px;
+  border-left: 3px solid var(--border2); background: var(--bg2);
+  transition: border-color .2s, background .2s;
+}
+.ai-section:hover { border-left-color: var(--ac); }
+.ai-sec-label {
+  font-family: 'Syne', sans-serif; font-size: 9px; font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; margin-bottom: 4px; color: var(--tx3);
+}
+.ai-sec-body { font-size: 11.5px; color: var(--tx2); line-height: 1.7; }
+.ai-sec-body strong { color: var(--tx); }
+.ai-sec-body em     { color: var(--tx3); font-style: italic; }
+
+/* Section accent colours */
+.sec-summary   { border-left-color: var(--ac2); background: rgba(0,153,204,.04); }
+.sec-summary   .ai-sec-label { color: var(--ac2); }
+.sec-valuation { border-left-color: var(--pu);  background: rgba(167,139,250,.04); }
+.sec-valuation .ai-sec-label { color: var(--pu); }
+.sec-tech      { border-left-color: var(--ac);  background: rgba(0,212,170,.04); }
+.sec-tech      .ai-sec-label { color: var(--ac); }
+.sec-risk      { border-left-color: var(--rd);  background: rgba(255,77,109,.04); }
+.sec-risk      .ai-sec-label { color: var(--rd); }
+.sec-macro     { border-left-color: var(--am);  background: rgba(255,184,48,.04); }
+.sec-macro     .ai-sec-label { color: var(--am); }
+.sec-sent      { border-left-color: var(--tx3); background: rgba(255,255,255,.02); }
+.sec-sent      .ai-sec-label { color: var(--tx2); }
+.sec-verdict   { border-left-color: var(--gn);  background: rgba(0,212,170,.06); }
+.sec-verdict   .ai-sec-label { color: var(--gn); font-size: 10px; }
+.sec-conf      { border-left-color: transparent; background: transparent; padding: 3px 8px; }
+.sec-conf      .ai-sec-label { font-size: 8px; }
+.sec-conf      .ai-sec-body  { font-size: 10px; color: var(--tx3); }
+
+/* Verdict colour variants */
+.verdict-buy  { border-left-color: var(--gn)  !important; background: rgba(0,212,170,.08)  !important; }
+.verdict-sell { border-left-color: var(--rd)  !important; background: rgba(255,77,109,.08)  !important; }
+.verdict-sell .ai-sec-label { color: var(--rd) !important; }
+.verdict-hold { border-left-color: var(--am)  !important; background: rgba(255,184,48,.08)  !important; }
+.verdict-hold .ai-sec-label { color: var(--am) !important; }
+
+/* ── MICRO-ANIMATIONS ──────────────────────────────────── */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.msg { animation: fade-up .22s ease forwards; }
+.signal-item { animation: fade-up .18s ease forwards; }
+
+/* Tab indicator */
+.tab { position: relative; transition: color .15s, background .15s; }
+.tab.on { position: relative; }
+.tab.on::after {
+  content: ''; position: absolute; bottom: 0; left: 50%;
+  transform: translateX(-50%); width: 20px; height: 2px;
+  background: var(--ac); border-radius: 2px 2px 0 0;
+}
+
+/* Card lift on hover */
+.card, .wl-card, .signal-item {
+  transition: border-color .2s, transform .15s, box-shadow .2s;
+}
+.card:hover      { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+.wl-card:hover   { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+
+/* Button press feel */
+.btn-big:active, .btn-launch:active, .btn-add:active, .btn-gen:active {
+  transform: scale(.98) !important;
+}
+
+/* Heatmap hover */
+.hm-cell { transition: transform .15s, box-shadow .15s; }
+.hm-cell:hover { transform: scale(1.07) !important; box-shadow: 0 8px 24px rgba(0,0,0,.5); z-index: 2; }
+
+/* Input focus glow unified */
+.key-input:focus, .chat-input:focus, .wl-input:focus, .chart-sym-input:focus {
+  box-shadow: 0 0 0 3px rgba(0,212,170,.1);
+}
+
+/* Topbar subtle glow strip */
+.topbar { box-shadow: 0 1px 0 rgba(0,212,170,.06); }
+
+/* Price widget big number gradient */
+.pw-price {
+  background: linear-gradient(135deg, var(--tx) 60%, var(--ac));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+
+/* Memory context display */
+#memoryCtx { transition: all .3s; }
+
+/* Panel transitions */
+.panel { transition: opacity .15s; }
+.panel.on { opacity: 1; }
+
+/* Sidebar btn smoother hover */
+.sb-btn { transition: all .15s; }
+
+/* ── RESPONSIVE IMPROVEMENTS ─────────────────────────── */
+@media(max-width:900px) {
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tabs::-webkit-scrollbar { height: 0; }
+  .tab { min-width: max-content; font-size: 10px; padding: 10px 10px; }
+}
+@media(max-width:680px) {
+  .topbar { padding: 0 10px; gap: 6px; }
+  .ticker-bar { display: none; }
+  .panel-scroll { padding: 10px 12px; }
+  .chat-input-row { padding: 8px 10px; gap: 6px; }
+  .q-chips { padding: 6px 10px; }
+  .wl-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .heatmap-container { grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); }
+  .brand small { display: none; }
+  .fh-sep, #backendLatency { display: none; }
+}
 </style>
 </head>
 <body>
@@ -975,6 +1093,12 @@ html, body {
             <button class="sb-btn ctx-ask" data-ask="Analyse TSLA">⚡ Tesla (TSLA)</button>
             <button class="sb-btn ctx-ask" data-ask="Analyse META">📘 Meta (META)</button>
             <button class="sb-btn ctx-ask" data-ask="Analyse AMZN">📦 Amazon (AMZN)</button>
+          </div>
+          <div class="ctx-section" style="border-top:1px solid var(--border)">
+            <div class="ctx-title">SESSION MEMORY</div>
+            <div id="memoryCtx" style="padding:8px 12px;font-size:9px;color:var(--tx3);line-height:1.6">
+              No active context — ask about a stock to begin
+            </div>
           </div>
           <div class="ctx-section" style="border-top:1px solid var(--border)">
             <div class="ctx-title">ANALYSIS TYPES</div>
@@ -1338,6 +1462,63 @@ const APP = {
   finnhubKey: '',
   backendOk:  false,
   currentUser: null,
+
+  // ── SESSION MEMORY SYSTEM ─────────────────────────────────────────────────
+  // Short-term conversational memory for multi-turn financial context
+  memory: {
+    activeTicker:     null,  // Last resolved ticker (e.g. "AAPL")
+    activeEntity:     null,  // Last resolved company name (e.g. "Apple")
+    activeProfile:    null,  // Last fetched profile object
+    lastAnalysisData: null,  // Full last analysis data package
+    conversationTurns: [],   // Rolling window of last 6 turns
+    topicChangedAt:   0,     // Timestamp of last topic change
+
+    addTurn(role, content) {
+      this.conversationTurns.push({ role, content: content.slice(0, 400) });
+      if (this.conversationTurns.length > 6) this.conversationTurns.shift();
+    },
+
+    setEntity(ticker, entity, profile, analysisData) {
+      this.activeTicker     = ticker;
+      this.activeEntity     = entity || ticker;
+      this.activeProfile    = profile || null;
+      this.lastAnalysisData = analysisData || null;
+      this.topicChangedAt   = Date.now();
+      // Update memory display in chat sidebar
+      const el = document.getElementById('memoryCtx');
+      if (el && ticker) {
+        const sector = profile?.finnhubIndustry ? ` · ${profile.finnhubIndustry}` : '';
+        const price  = analysisData?.quote?.c ? ` · $${analysisData.quote.c.toFixed(2)}` : '';
+        el.innerHTML = `<span style="color:var(--ac);font-weight:700">${ticker}</span>${price}<br><span style="color:var(--tx2)">${entity || ticker}${sector}</span><br><span style="opacity:.6">Active context — follow-ups resolved automatically</span>`;
+      }
+    },
+
+    getContextSummary() {
+      if (!this.activeTicker) return '';
+      const age = Math.round((Date.now() - this.topicChangedAt) / 1000);
+      const ageStr = age < 120 ? age + 's ago' : Math.round(age/60) + 'm ago';
+      return '[Session context: discussing ' + this.activeEntity + ' (' + this.activeTicker + '), last updated ' + ageStr + ']';
+    },
+
+    isFollowUp(msg) {
+      const followUpPatterns = [
+        /\b(it|its|this|that|they|their|the company|the stock|the same|this stock|this company|more about|tell me more|what about|how about)\b/i,
+        /^(what|how|why|is|does|did|has|have|can|will|would|should|when)\b/i,
+        /^(and|also|but|so|then|what if|what\'s|what is|what are)\b/i,
+      ];
+      const hasNewTicker = /\b[A-Z]{2,5}\b/.test(msg);
+      const hasCompanyName = /\b(apple|microsoft|google|tesla|nvidia|amazon|meta|netflix|amazon)\b/i.test(msg);
+      if (hasNewTicker || hasCompanyName) return false;
+      return followUpPatterns.some(p => p.test(msg.trim()));
+    },
+
+    clear() {
+      this.activeTicker = null; this.activeEntity = null;
+      this.activeProfile = null; this.lastAnalysisData = null;
+      this.conversationTurns = []; this.topicChangedAt = 0;
+    },
+  },
+
   state: {
     watchlist:       [],
     portfolio:       [],
@@ -1718,22 +1899,19 @@ const APP = {
   },
 
   rerunAnalysis(symbol) {
-    // Switch to AI Analyst tab and pre-fill the symbol
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
-    document.getElementById('tab-chat')?.classList.add('on');
-    document.getElementById('panel-chat')?.classList.add('on');
-    const input = document.getElementById('chatInput');
+    // Switch to AI Analyst tab and trigger analysis
+    this.switchTab('chat');
+    const input = document.getElementById('cin');
     if (input) {
       input.value = `Analyse ${symbol}`;
       input.focus();
+      // Auto-trigger the analysis
+      setTimeout(() => this.sendChat(), 200);
     }
   },
 
-  saveData() {
-    localStorage.setItem('stockmind_watchlist',  JSON.stringify(this.state.watchlist));
-    localStorage.setItem('stockmind_portfolio',  JSON.stringify(this.state.portfolio));
-  },
+  // saveData() is a no-op — Firestore persistState() handles all persistence
+  saveData() {},
 
   // ── EVENT LISTENERS ──────────────────────────────────────────────────────
   attachEventListeners() {
@@ -1830,12 +2008,12 @@ const APP = {
     document.getElementById('briefBtn')?.addEventListener('click', () => this.generateBrief());
 
     // Change Groq key
-    document.getElementById('changeKeyBtn')?.addEventListener('click', () => {
-      const newKey = prompt('Enter new Groq API key:');
+    document.getElementById('changeKeyBtn')?.addEventListener('click', async () => {
+      const newKey = prompt('Enter new Groq API key (starts with gsk_):');
       if (newKey && newKey.trim()) {
         this.groqKey = newKey.trim();
-        localStorage.setItem('stockmind_groq_key', newKey.trim());
-        this.toast('✅ Groq key updated');
+        await this.saveUserData({ groqKey: newKey.trim() });
+        this.toast('✅ Groq key updated & saved');
       }
     });
   },
@@ -2255,7 +2433,7 @@ Max 250 words. No invented data. If a metric is "Not provided", do not estimate 
     const verdict = result.includes('BUY') ? 'BUY' : result.includes('SELL') ? 'SELL' : 'HOLD';
     document.getElementById('faTitle').textContent = `${ticker} Analysis`;
     document.getElementById('faVerdEl').innerHTML  = `<div class="verd ${verdict.toLowerCase()}">${verdict}</div>`;
-    document.getElementById('faBody').textContent  = result;
+    document.getElementById('faBody').innerHTML    = this.formatAIResponse(result);
     document.getElementById('faResult').style.display  = 'block';
     document.getElementById('pdfExportBtn').style.display = 'inline-block';
     this.toast(`✅ Analysis complete: ${verdict}`);
@@ -2310,36 +2488,46 @@ Max 250 words. No invented data. If a metric is "Not provided", do not estimate 
     const d2 = document.getElementById('cs2data').value || 'None';
     const d3 = document.getElementById('cs3data').value || 'None';
 
-    let prompt = `You are StockMind AI — institutional-grade analysis engine. Compare these stocks using ONLY the verified live data below. Do not fabricate metrics not present here.
+    const t1 = this.computeTechnicals(null, q1);
+    const t2 = this.computeTechnicals(null, q2);
+    const t3 = q3 ? this.computeTechnicals(null, q3) : null;
+    const r1 = this.calculateRisk(null, q1, t1);
+    const r2 = this.calculateRisk(null, q2, t2);
+    const r3 = q3 ? this.calculateRisk(null, q3, t3) : null;
 
-LIVE DATA (verified via Finnhub backend):
-${s1}: $${q1.c?.toFixed(2)} (${q1.dp >= 0 ? '+' : ''}${q1.dp?.toFixed(2)}%) | Day: $${q1.l?.toFixed(2)}–$${q1.h?.toFixed(2)} | Notes: ${d1}
-${s2}: $${q2.c?.toFixed(2)} (${q2.dp >= 0 ? '+' : ''}${q2.dp?.toFixed(2)}%) | Day: $${q2.l?.toFixed(2)}–$${q2.h?.toFixed(2)} | Notes: ${d2}`;
-    if (q3) prompt += `\n${s3}: $${q3.c?.toFixed(2)} (${q3.dp >= 0 ? '+' : ''}${q3.dp?.toFixed(2)}%) | Day: $${q3.l?.toFixed(2)}–$${q3.h?.toFixed(2)} | Notes: ${d3}`;
+    let prompt = `You are StockMind AI — institutional equity analyst. Compare these stocks using ONLY the verified live data. No fabricated metrics.
+
+VERIFIED LIVE DATA (Finnhub via backend):
+${s1}: $${q1.c?.toFixed(2)} | Day: ${q1.dp >= 0 ? '+' : ''}${q1.dp?.toFixed(2)}% | Range: $${q1.l?.toFixed(2)}–$${q1.h?.toFixed(2)} | Risk: ${r1.level} | ${t1.rsiNote || ''} | User notes: ${d1}
+${s2}: $${q2.c?.toFixed(2)} | Day: ${q2.dp >= 0 ? '+' : ''}${q2.dp?.toFixed(2)}% | Range: $${q2.l?.toFixed(2)}–$${q2.h?.toFixed(2)} | Risk: ${r2.level} | ${t2.rsiNote || ''} | User notes: ${d2}`;
+    if (q3) prompt += `\n${s3}: $${q3.c?.toFixed(2)} | Day: ${q3.dp >= 0 ? '+' : ''}${q3.dp?.toFixed(2)}% | Range: $${q3.l?.toFixed(2)}–$${q3.h?.toFixed(2)} | Risk: ${r3.level} | ${t3?.rsiNote || ''} | User notes: ${d3}`;
 
     prompt += `
 
-RESPOND IN THIS FORMAT:
+RESPOND IN THIS EXACT FORMAT:
 📊 INDIVIDUAL ASSESSMENT
-${s1}: [2 sentences based on live data + notes only]
-${s2}: [2 sentences based on live data + notes only]
-${s3 ? s3 + ': [2 sentences based on live data + notes only]' : ''}
+${s1}: [2 sentences — price action, risk level, and what the data reveals]
+${s2}: [2 sentences — price action, risk level, and what the data reveals]
+${s3 ? s3 + ': [2 sentences — price action, risk level, and what the data reveals]' : ''}
 
-⚖️ RELATIVE STRENGTHS
-[Compare momentum, notes, and any provided financials — no fabricated P/E or metrics]
+⚖ COMPARATIVE MOMENTUM
+[Which is showing strongest intraday momentum and relative strength today — cite specific % changes]
+
+🔴 RISK COMPARISON
+[Risk level comparison across the stocks — cite the risk factors from data above]
 
 🎯 RELATIVE VERDICT
-[Which shows stronger momentum today and why — based only on data above]
+[Which stock presents the strongest technical setup TODAY based strictly on the verified data — be specific]
 
-⚠ Note: Comparative valuation requires verified financial metrics. Live price momentum only — not a complete fundamental comparison. Not financial advice.
+⚠ Live price momentum analysis only — fundamental comparison requires verified financials. Not financial advice.
 
-Max 220 words. If notes are insufficient for a category, state "Insufficient data for comparative analysis."`;
+Max 220 words. State "Insufficient data" for any section where notes are inadequate.`;
 
     const result = await this.callGroqAI(prompt);
     btn.disabled = false; btn.textContent = '⚖️ Fetch Live & Compare';
     if (!result) return;
 
-    document.getElementById('cmpBody').textContent      = result;
+    document.getElementById('cmpBody').innerHTML     = this.formatAIResponse(result);
     document.getElementById('cmpResult').style.display  = 'block';
     document.getElementById('cmpPdfBtn').style.display  = 'inline-block';
     this.toast('✅ Comparison complete!');
@@ -2366,7 +2554,7 @@ Max 220 words. If notes are insufficient for a category, state "Insufficient dat
     if (this.state.watchlist.find(w => w.symbol === symbol)) { this.toast('Already in watchlist'); return; }
 
     this.state.watchlist.push({ symbol, added: new Date().toLocaleString() });
-    this.saveData();
+    this.persistState();
     input.value = '';
     this.refreshWatchlist();
     this.toast(`✅ Added ${symbol}`);
@@ -2412,7 +2600,7 @@ Max 220 words. If notes are insufficient for a category, state "Insufficient dat
 
   removeWatchlist(symbol) {
     this.state.watchlist = this.state.watchlist.filter(w => w.symbol !== symbol);
-    this.saveData();
+    this.persistState();
     this.refreshWatchlist();
   },
 
@@ -2425,7 +2613,7 @@ Max 220 words. If notes are insufficient for a category, state "Insufficient dat
     if (!sym || !qty || !avg) { this.toast('Fill all portfolio fields'); return; }
 
     this.state.portfolio.push({ symbol: sym, qty, avg, currency: curr });
-    this.saveData();
+    this.persistState();
     document.getElementById('portSym').value = '';
     document.getElementById('portQty').value = '';
     document.getElementById('portAvg').value = '';
@@ -2467,7 +2655,7 @@ Max 220 words. If notes are insufficient for a category, state "Insufficient dat
 
   removePortfolio(symbol) {
     this.state.portfolio = this.state.portfolio.filter(p => p.symbol !== symbol);
-    this.saveData();
+    this.persistState();
     this.refreshPortfolio();
   },
 
@@ -2477,22 +2665,60 @@ Max 220 words. If notes are insufficient for a category, state "Insufficient dat
     const btn = document.getElementById('analysePortBtn');
     btn.disabled = true; btn.textContent = '⏳ Analysing…';
 
-    const results = await ApiClient.batchQuotes(this.state.portfolio.map(p => p.symbol));
+    const results  = await ApiClient.batchQuotes(this.state.portfolio.map(p => p.symbol));
     const bySymbol = Object.fromEntries(results.map(r => [r.symbol, r.quote]));
 
-    let prompt = 'Analyse this portfolio (live prices from secure backend):\n';
+    // Build verified P&L summary
+    let totalValue = 0, totalCost = 0;
+    let portfolioLines = '';
     for (const pos of this.state.portfolio) {
-      const quote = bySymbol[pos.symbol];
-      prompt += `\n${pos.symbol}: ${pos.qty} shares @ $${pos.avg} avg, current $${quote?.c?.toFixed(2) || 'N/A'}`;
+      const quote   = bySymbol[pos.symbol];
+      const curr    = quote?.c || 0;
+      const cost    = pos.avg * pos.qty;
+      const value   = curr * pos.qty;
+      const pl      = value - cost;
+      const plPct   = pos.avg > 0 ? ((curr - pos.avg) / pos.avg * 100).toFixed(1) : '0.0';
+      const tech    = this.computeTechnicals(null, quote);
+      totalValue += value; totalCost += cost;
+      portfolioLines += `\n${pos.symbol}: ${pos.qty} shares | Avg: $${pos.avg} | Live: $${curr.toFixed(2)} | P&L: ${pl >= 0 ? '+' : ''}$${pl.toFixed(0)} (${plPct}%) | ${tech.rsiNote || ''}`;
     }
-    prompt += '\n\nProvide: risk assessment, diversification analysis, and rebalancing suggestions.';
+    const totalPL    = totalValue - totalCost;
+    const totalPLPct = totalCost > 0 ? ((totalPL / totalCost) * 100).toFixed(1) : '0.0';
+
+    const prompt = `You are StockMind AI — institutional portfolio analyst. Analyse this verified portfolio using ONLY the data below.
+
+VERIFIED PORTFOLIO DATA (live prices via backend):
+${portfolioLines}
+
+TOTALS: Portfolio Value: $${totalValue.toFixed(0)} | Total P&L: ${totalPL >= 0 ? '+' : ''}$${totalPL.toFixed(0)} (${totalPLPct}%) | Positions: ${this.state.portfolio.length}
+
+RESPOND IN THIS FORMAT:
+
+📊 PORTFOLIO SUMMARY
+[Total value, overall P&L, and what the aggregate performance reveals]
+
+📈 TOP PERFORMERS & LAGGARDS
+[Which positions are working and which aren't, citing specific P&L % above]
+
+⚖ CONCENTRATION & RISK
+[Are positions overweight in any sector? Single-stock risk? Diversification quality?]
+
+🔄 REBALANCING SIGNALS
+[Which positions appear extended (take profit?) or washed out (add?) based on price data]
+
+🎯 KEY RECOMMENDATION
+[One specific, data-driven action the investor should consider — cite the specific stock and data]
+
+⚠ Confidence: Live prices verified · Avg cost user-provided · Not financial advice
+
+Max 250 words. Only reference the positions and data listed above.`;
 
     const result = await this.callGroqAI(prompt);
     btn.disabled = false; btn.textContent = '🤖 AI Analyse';
     if (!result) return;
 
-    document.getElementById('portAnalysisBody').textContent = result;
-    document.getElementById('portAnalysis').style.display   = 'block';
+    document.getElementById('portAnalysisBody').innerHTML = this.formatAIResponse(result);
+    document.getElementById('portAnalysis').style.display = 'block';
   },
 
   // ── AI CHAT ───────────────────────────────────────────────────────────────
@@ -2518,13 +2744,30 @@ Max 220 words. If notes are insufficient for a category, state "Insufficient dat
     msgs.appendChild(thinkDiv);
     msgs.scrollTop = msgs.scrollHeight;
 
+    // Record user turn in memory
+    this.memory.addTurn('user', msg);
+
+    // Safe helper: update thinkDiv status text without crashing
+    const setThinkText = (txt) => {
+      const sp = thinkDiv.querySelector('span');
+      if (sp) sp.textContent = txt;
+    };
+
     try {
-      // ── STEP 1: Resolve ticker ────────────────────────────────────────────
+      // ── STEP 1: Resolve ticker + MEMORY FOLLOW-UP DETECTION ──────────────
       // Check for Finnhub key first
       if (!APP.finnhubKey) {
         thinkDiv.querySelector('.bubble').innerHTML =
           `<strong>⚠️ Finnhub key not found.</strong><br>Please sign out and sign back in to re-enter your API keys.`;
         return;
+      }
+
+      // ── MEMORY: detect follow-up questions ────────────────────────────────
+      // If this looks like a follow-up (pronouns, no new ticker) and we have
+      // an active entity from earlier in the session, inject that context.
+      const isFollowUp = this.memory.activeTicker && this.memory.isFollowUp(msg);
+      if (isFollowUp) {
+        setThinkText(`Continuing analysis of ${this.memory.activeEntity}…`);
       }
 
       const IGNORE = new Set(['AI','THE','FOR','AND','BUY','NOT','GET','CAN',
@@ -2566,7 +2809,7 @@ Max 220 words. If notes are insufficient for a category, state "Insufficient dat
         'best buy':'BBY', ikea:'NULL', zara:'ITX', 'h&m':'HM',
 
         // ── Entertainment / Media ─────────────────────────────────────────
-        disney:'DIS', netflix:'NFLX', spotify:'SPOT', warner:'WBD',
+        disney:'DIS', spotify:'SPOT', warner:'WBD',
         paramount:'PARA', comcast:'CMCSA', sony:'SONY', roku:'ROKU',
         roblox:'RBLX', unity:'U', ea:'EA', 'electronic arts':'EA',
         activision:'ATVI', 'take two':'TTWO', ubisoft:'UBSFY',
@@ -2623,7 +2866,7 @@ Max 220 words. If notes are insufficient for a category, state "Insufficient dat
         'bristol myers':'BMY', gilead:'GILD', regeneron:'REGN',
         biogen:'BIIB', illumina:'ILMN', 'edwards lifesciences':'EW',
         dexcom:'DXCM', intuitive:'ISRG', humana:'HUM', cigna:'CI',
-        anthem:'ELV', elevance:'ELV', cvs:'CVS', mckesson:'MCK',
+        anthem:'ELV', elevance:'ELV', mckesson:'MCK',
 
         // ── Energy ────────────────────────────────────────────────────────
         exxon:'XOM', 'exxon mobil':'XOM', chevron:'CVX', shell:'SHEL',
@@ -2706,10 +2949,16 @@ Max 220 words. If notes are insufficient for a category, state "Insufficient dat
       // Combine explicit + name-matched tickers
       let tickerMatch = [...new Set([...explicitTickers, ...nameTickers])].slice(0, 1);
 
+      // ── MEMORY: if follow-up with no new ticker, use session memory ───────
+      if (tickerMatch.length === 0 && isFollowUp && this.memory.activeTicker) {
+        tickerMatch = [this.memory.activeTicker];
+        console.log(`[Memory] Follow-up detected — reusing ${this.memory.activeTicker}`);
+      }
+
       // If still nothing found, try Finnhub search as fallback
       if (tickerMatch.length === 0 && msg.trim().length > 2) {
         try {
-          thinkDiv.querySelector('span').textContent = 'Searching for company…';
+          setThinkText('Searching for company…');
           const sres  = await fetch(
             `${CONFIG.BACKEND_URL}/search/${encodeURIComponent(msg.trim())}`,
             { headers: { 'x-finnhub-key': APP.finnhubKey } }
@@ -2727,8 +2976,19 @@ Max 220 words. If notes are insufficient for a category, state "Insufficient dat
       let analysisData = null;
       let confidence   = null;
 
-      if (tickerMatch.length > 0) {
-        thinkDiv.querySelector('span').textContent = `Fetching live data for ${tickerMatch[0]}…`;
+      // Optimisation: if follow-up on same ticker and data is fresh (<90s), reuse cached data
+      const cacheAge = this.memory.lastAnalysisData && this.memory.activeTicker === tickerMatch[0]
+        ? (Date.now() - this.memory.topicChangedAt) / 1000
+        : Infinity;
+      const canReuseCache = cacheAge < 90 && this.memory.lastAnalysisData?.quote?.c;
+
+      if (canReuseCache) {
+        analysisData = this.memory.lastAnalysisData;
+        confidence   = analysisData.confidence;
+        setThinkText(`Using fresh ${this.memory.activeTicker} data (${Math.round(cacheAge)}s old)…`);
+        console.log(`[Memory] Cache hit — reusing ${this.memory.activeTicker} data (${Math.round(cacheAge)}s old)`);
+      } else if (tickerMatch.length > 0) {
+        setThinkText(`Fetching live data for ${tickerMatch[0]}…`);
         try {
           const ares  = await fetch(
             `${CONFIG.BACKEND_URL}/analyse/${tickerMatch[0]}`,
@@ -2739,6 +2999,13 @@ Max 220 words. If notes are insufficient for a category, state "Insufficient dat
           if (ajson.success) {
             analysisData = ajson.data;
             confidence   = ajson.data.confidence;
+            // Store in session memory
+            this.memory.setEntity(
+              tickerMatch[0],
+              ajson.data?.profile?.name || tickerMatch[0],
+              ajson.data?.profile,
+              ajson.data
+            );
           } else {
             console.warn('[Chat] Analyse failed:', ajson.error?.message);
           }
@@ -2784,7 +3051,7 @@ Max 220 words. If notes are insufficient for a category, state "Insufficient dat
         // Stale data warning (show but don't block)
         const freshness = q._meta?.freshness || '';
         if (freshness === 'stale') {
-          thinkDiv.querySelector('span').textContent = `⚠ Stale data detected for ${analysisData.symbol} — proceeding with caution…`;
+          setThinkText(`⚠ Stale data detected for ${analysisData.symbol} — proceeding with caution…`);
         }
       }
 
@@ -2804,13 +3071,13 @@ Max 220 words. If notes are insufficient for a category, state "Insufficient dat
         }),
       });
 
-      document.getElementById('groqStatus').textContent = 'ready';
-      document.getElementById('groqStatus').style.color = 'var(--gn)';
-
       if (!groqRes.ok) {
         const ed = await groqRes.json().catch(() => ({}));
         throw new Error(ed.error?.message || `Groq error ${groqRes.status}`);
       }
+
+      document.getElementById('groqStatus').textContent = 'ready';
+      document.getElementById('groqStatus').style.color = 'var(--gn)';
 
       const groqData = await groqRes.json();
       const result   = groqData.choices?.[0]?.message?.content || 'No response.';
@@ -2835,26 +3102,110 @@ Max 220 words. If notes are insufficient for a category, state "Insufficient dat
 
       const aiDiv = document.createElement('div');
       aiDiv.className = 'msg ai';
-      const rendered = result
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/^#{1,3} (.+)$/gm, '<strong>$1</strong>')
-        .replace(/\n/g, '<br>');
-      aiDiv.innerHTML = `<div class="msg-label">StockMind AI</div><div class="bubble ai">${rendered}${confBadge}</div>`;
+      const rendered = this.formatAIResponse(result);
+      aiDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">${rendered}${confBadge}</div>`;
       msgs.appendChild(aiDiv);
       msgs.scrollTop = msgs.scrollHeight;
 
       // Save to history
       if (analysisData?.symbol) this.saveAnalysis(analysisData.symbol, result);
-      if (analysisData?.symbol) this.addSidebarSignal(analysisData.symbol, result);
+      // Extract verdict for sidebar signal
+      if (analysisData?.symbol) {
+        const sv = result.includes('BUY') ? 'BUY' : result.includes('SELL') ? 'SELL' : 'HOLD';
+        this.addSidebarSignal(analysisData.symbol, sv);
+      }
 
     } catch(e) {
       console.error('[Chat] Error:', e);
       document.getElementById('groqStatus').textContent = 'error';
       document.getElementById('groqStatus').style.color = 'var(--rd)';
-      thinkDiv.querySelector('.bubble').innerHTML =
-        `<strong>❌ Error:</strong> ${e.message}<br><br>Check your API keys and try again.`;
+      // thinkDiv may have already been removed — guard with isConnected
+      if (thinkDiv.isConnected) {
+        thinkDiv.querySelector('.bubble').innerHTML =
+          `<strong>❌ Error:</strong> ${e.message}<br><br>Check your API keys and try again.`;
+      } else {
+        // thinkDiv was already removed — append a new error message
+        const errDiv = document.createElement('div');
+        errDiv.className = 'msg ai';
+        errDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><strong>❌ Error:</strong> ${e.message}<br><br>Check your API keys and try again.</div>`;
+        document.getElementById('chatMsgs').appendChild(errDiv);
+        document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+      }
     }
+  },
+
+  // ── AI RESPONSE FORMATTER — Bloomberg section renderer ────────────────────
+  formatAIResponse(text) {
+    if (!text) return '';
+
+    // Section definitions: emoji prefix → colour class + label
+    const sections = [
+      { prefix: '📊 SUMMARY',         cls: 'sec-summary'  },
+      { prefix: '📈 VALUATION',        cls: 'sec-valuation'},
+      { prefix: '⚡ TECHNICALS',       cls: 'sec-tech'     },
+      { prefix: '🔴 RISK',             cls: 'sec-risk'     },
+      { prefix: '🌐 MARKET CONTEXT',   cls: 'sec-macro'    },
+      { prefix: '💬 SENTIMENT',        cls: 'sec-sent'     },
+      { prefix: '🎯 VERDICT',          cls: 'sec-verdict'  },
+      { prefix: '⚠ Confidence',        cls: 'sec-conf'     },
+    ];
+
+    // Split into labelled sections
+    let html = '';
+    let remaining = text;
+
+    // Walk through sections in order, extract content between them
+    for (let i = 0; i < sections.length; i++) {
+      const { prefix, cls } = sections[i];
+      const nextPrefixes = sections.slice(i + 1).map(s => s.prefix);
+
+      const startIdx = remaining.indexOf(prefix);
+      if (startIdx === -1) continue;
+
+      const afterPrefix = remaining.slice(startIdx + prefix.length).trimStart().replace(/^[\n:]+/, '').trimStart();
+
+      // Find where this section ends (next section starts)
+      let endIdx = afterPrefix.length;
+      for (const np of nextPrefixes) {
+        const ni = afterPrefix.indexOf(np);
+        if (ni !== -1 && ni < endIdx) endIdx = ni;
+      }
+
+      const content = afterPrefix.slice(0, endIdx).trim();
+      remaining = afterPrefix.slice(endIdx);
+
+      if (!content) continue;
+
+      // Inline markdown
+      const formatted = content
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code style="background:var(--s3);padding:1px 4px;border-radius:3px;font-size:10px">$1</code>')
+        .replace(/\n/g, '<br>');
+
+      // Verdict special coloring
+      let verdictClass = '';
+      if (cls === 'sec-verdict') {
+        if (/\bBUY\b/i.test(content))  verdictClass = 'verdict-buy';
+        else if (/\bSELL\b/i.test(content)) verdictClass = 'verdict-sell';
+        else verdictClass = 'verdict-hold';
+      }
+
+      html += `<div class="ai-section ${cls} ${verdictClass}">
+        <div class="ai-sec-label">${prefix}</div>
+        <div class="ai-sec-body">${formatted}</div>
+      </div>`;
+    }
+
+    // If no sections matched (non-structured response), fall back to simple render
+    if (!html) {
+      html = text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/\n/g, '<br>');
+    }
+
+    return html;
   },
 
   // ── DYNAMIC CONFIDENCE ENGINE ─────────────────────────────────────────────
@@ -3030,13 +3381,7 @@ Max 220 words. If notes are insufficient for a category, state "Insufficient dat
 
     // Signal line: 9-period EMA of MACD values
     if (closes.length < 35) return { macdLine, signal: null, histogram: null };
-    const macdValues = [];
-    const k12 = 2 / 13, k26 = 2 / 27;
-    let e12 = closes.slice(0, 12).reduce((a, b) => a + b, 0) / 12;
-    let e26 = closes.slice(0, 26).reduce((a, b) => a + b, 0) / 26;
-    for (let i = 12; i < closes.length; i++) { e12 = closes[i] * k12 + e12 * (1 - k12); }
-    for (let i = 26; i < closes.length; i++) { e26 = closes[i] * k26 + e26 * (1 - k26); }
-    // Simplified: return current macdLine and direction
+    // Compare with previous period to detect crossover direction
     const prevE12 = this._calcEMA(closes.slice(0, -1), 12);
     const prevE26 = this._calcEMA(closes.slice(0, -1), 26);
     const prevMacd = prevE12 != null && prevE26 != null ? prevE12 - prevE26 : null;
@@ -3306,7 +3651,7 @@ DATA RULES (non-negotiable):
 USER QUERY: ${userMessage}`;
   },
 
-    clearChat() {
+  clearChat() {
     document.getElementById('chatMsgs').innerHTML = `
       <div class="msg ai">
         <div class="msg-label">StockMind AI Pro</div>
@@ -3342,9 +3687,13 @@ USER QUERY: ${userMessage}`;
         continue;
       }
 
-      const prompt = `${r.symbol} current price: $${r.quote.c?.toFixed(2)} (${r.quote.dp >= 0 ? '+' : ''}${r.quote.dp?.toFixed(2)}% today). Day range: $${r.quote.l?.toFixed(2)}-$${r.quote.h?.toFixed(2)}. Previous close: $${r.quote.pc?.toFixed(2)}.
+      // Compute intraday technicals for richer signal
+      const sigTech = this.computeTechnicals(null, r.quote);
+      const sigRisk = this.calculateRisk(null, r.quote, sigTech);
 
-Give ONE sentence: start with BUY, HOLD, or SELL then explain why based only on this price data. Max 20 words. Do not mention any metrics you don't have.`;
+      const prompt = `You are StockMind AI — institutional signal engine. ${r.symbol}: Price $${r.quote.c?.toFixed(2)} | Day: ${r.quote.dp >= 0 ? '+' : ''}${r.quote.dp?.toFixed(2)}% | Range: $${r.quote.l?.toFixed(2)}–$${r.quote.h?.toFixed(2)} | Prev: $${r.quote.pc?.toFixed(2)} | ${sigTech.rsiNote || ''} | Risk: ${sigRisk.level}
+
+Start with BUY, HOLD, or SELL. One sentence (max 25 words). Cite the specific price data above. No invented metrics.`;
 
       const signal  = await this.callGroqAI(prompt);
       const verdict = signal?.toUpperCase().startsWith('BUY')  ? 'BUY'
@@ -3462,7 +3811,7 @@ Max 300 words. Reference specific prices and % changes from the data above. Do n
     btn.disabled = false; btn.textContent = '📰 Generate Brief';
     if (!result) return;
 
-    document.getElementById('briefBody').textContent    = result;
+    document.getElementById('briefBody').innerHTML     = this.formatAIResponse(result);
     document.getElementById('briefContent').style.display = 'block';
     document.getElementById('briefPdfBtn').style.display  = 'inline-block';
   },
