@@ -55,6 +55,47 @@ app.use((req, _res, next) => {
   next();
 });
 
+// ── GROQ PROXY ────────────────────────────────────────────────────────────────
+// Proxies AI requests so the frontend never calls api.groq.com directly.
+// The user's Groq key is forwarded from the x-groq-key header — never stored.
+app.post('/api/groq', async (req, res) => {
+  const groqKey = req.headers['x-groq-key'] || '';
+  if (!groqKey) {
+    return res.status(400).json({ success: false, error: { message: 'Missing Groq key', code: 400 } });
+  }
+
+  const { model, messages, max_tokens, temperature } = req.body;
+  if (!messages || !Array.isArray(messages)) {
+    return res.status(400).json({ success: false, error: { message: 'Invalid request body', code: 400 } });
+  }
+
+  try {
+    const axios = require('axios');
+    const groqRes = await axios.post(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        model:       model       || 'llama-3.3-70b-versatile',
+        messages,
+        max_tokens:  max_tokens  || 1200,
+        temperature: temperature ?? 0.65,
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${groqKey}`,
+          'Content-Type':  'application/json',
+        },
+        timeout: 30000,
+      }
+    );
+    res.json({ success: true, data: groqRes.data });
+  } catch (e) {
+    const status  = e.response?.status  || 500;
+    const message = e.response?.data?.error?.message || e.message || 'Groq request failed';
+    logger.error('Groq proxy error', { status, message });
+    res.status(status).json({ success: false, error: { message, code: status } });
+  }
+});
+
 // Routes
 app.use('/api', apiRoutes);
 app.get('/health', (req, res) => res.redirect('/api/health'));

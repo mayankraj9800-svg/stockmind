@@ -1706,7 +1706,6 @@ const CONFIG = {
   BACKEND_URL: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:3001/api'
     : 'https://stockmind-backend-mwqw.onrender.com/api',
-  GROQ_URL:          'https://api.groq.com/openai/v1/chat/completions',
   GROQ_MODEL:        'llama-3.3-70b-versatile',
   TICKER_SYMBOLS:    ['AAPL','MSFT','NVDA','TSLA','GOOGL','META','AMZN','AMD','NFLX','CRM','JPM','V','LLY','TSM','INFY','SHEL','TM'],
   TICKER_REFRESH_MS: 30_000,
@@ -2672,16 +2671,17 @@ Max 100 words.`;
       document.getElementById('groqStatus').textContent = 'thinking…';
       document.getElementById('groqStatus').style.color = 'var(--am)';
 
-      // ── BUG FIX: add 30s timeout — previously could hang forever ──
-      const groqController = new AbortController();
-      const groqTimeout = setTimeout(() => groqController.abort(), 30000);
+      const controller = new AbortController();
+      const timeout    = setTimeout(() => controller.abort(), 35000);
+
       let res;
       try {
-        res = await fetch(CONFIG.GROQ_URL, {
-          method: 'POST',
+        // ── Route through backend proxy to avoid CORS ──────────────────────
+        res = await fetch(`${CONFIG.BACKEND_URL}/groq`, {
+          method:  'POST',
           headers: {
-            'Authorization': `Bearer ${this.groqKey}`,
-            'Content-Type':  'application/json',
+            'Content-Type': 'application/json',
+            'x-groq-key':   this.groqKey,
           },
           body: JSON.stringify({
             model:       CONFIG.GROQ_MODEL,
@@ -2689,30 +2689,46 @@ Max 100 words.`;
             max_tokens:  1200,
             temperature: 0.65,
           }),
-          signal: groqController.signal,
+          signal: controller.signal,
         });
       } finally {
-        clearTimeout(groqTimeout);
+        clearTimeout(timeout);
       }
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error?.message || `Groq ${res.status}`);
+        const msg = errData.error?.message || `Groq ${res.status}`;
+        // Surface rate-limit specifically
+        if (res.status === 429) throw new Error('rate_limit: ' + msg);
+        if (res.status === 401 || res.status === 403) throw new Error('auth: ' + msg);
+        throw new Error(msg);
       }
 
-      const data = await res.json();
-      const content = data.choices?.[0]?.message?.content || '';
+      const data    = await res.json();
+      const content = data.data?.choices?.[0]?.message?.content || '';
       document.getElementById('groqStatus').textContent = 'ready';
       document.getElementById('groqStatus').style.color = 'var(--gn)';
       return content;
+
     } catch (e) {
       console.error('[Groq]', e);
       document.getElementById('groqStatus').textContent = 'error';
       document.getElementById('groqStatus').style.color = 'var(--rd)';
-      this.toast(`⚠️ Groq AI error: ${e.message}`);
+
+      // User-friendly error messages
+      const msg = e.message || '';
+      if (msg.includes('rate_limit') || msg.includes('429'))
+        this.toast('⏱ Groq rate limit — please wait 30 seconds and try again');
+      else if (msg.includes('auth') || msg.includes('401') || msg.includes('403'))
+        this.toast('🔑 Groq key invalid — update it in the ⚙ settings');
+      else if (e.name === 'AbortError')
+        this.toast('⏱ Groq request timed out — please try again');
+      else
+        this.toast(`⚠️ Groq AI error: ${msg}`);
       return null;
     }
   },
+
 
   // ── TICKER BAR ────────────────────────────────────────────────────────────
   initTicker() {
