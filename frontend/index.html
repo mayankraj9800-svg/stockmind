@@ -1841,9 +1841,16 @@ const ApiClient = {
       }
     }
 
-    if (isEmpty && resolved.exchange === 'NSE') {
-      // Last resort: try Finnhub symbol search to find a valid symbol
-      console.log(`[ApiClient] ${resolved.apiSymbol} empty — trying search fallback`);
+    if (isEmpty && (resolved.exchange === 'NSE' || resolved.exchange === 'LSE' || resolved.exchange === 'BSE')) {
+      // Try Yahoo Finance quote proxy for international stocks
+      console.log(`[ApiClient] ${resolved.apiSymbol} empty — trying Yahoo quote fallback`);
+      const yahooSym = resolved.apiSymbol.endsWith('.NS') || resolved.apiSymbol.endsWith('.L')
+        ? resolved.apiSymbol
+        : resolved.exchange === 'NSE' ? `${resolved.displaySymbol}.NS` : resolved.apiSymbol;
+      const yq = await this.yahooQuote(yahooSym);
+      if (yq?.c) return { quote: yq, symbolUsed: yahooSym, providerNote: `Yahoo Finance · ${resolved.exchange}` };
+
+      // Final fallback: Finnhub search
       try {
         const sres = await fetch(`${CONFIG.BACKEND_URL}/search/${encodeURIComponent(resolved.displaySymbol)}`,
           { headers: this._headers() });
@@ -1865,12 +1872,51 @@ const ApiClient = {
   // ── PROVIDER-AWARE CANDLES WITH FALLBACK ───────────────────────────
   async candlesWithFallback(resolved, days = 220) {
     if (!resolved) return null;
+
+    // 1. Try Finnhub (best for US stocks)
     let c = await this.candles(resolved.apiSymbol, days);
-    // If primary fails and we have a .NS fallback, try that
-    if ((!c || !c.c?.length) && resolved.nsFallback) {
+    if (this._validCandles(c)) return c;
+
+    // 2. Try Finnhub with .NS fallback
+    if (resolved.nsFallback) {
       c = await this.candles(resolved.nsFallback, days);
+      if (this._validCandles(c)) return c;
     }
-    return c;
+
+    // 3. Try Yahoo Finance via backend proxy (works globally)
+    c = await this.yahooCandles(resolved.apiSymbol, days);
+    if (this._validCandles(c)) return c;
+
+    // 4. For NSE stocks: try explicit .NS suffix on Yahoo
+    if (resolved.exchange === 'NSE' && !resolved.apiSymbol.endsWith('.NS')) {
+      c = await this.yahooCandles(`${resolved.displaySymbol}.NS`, days);
+      if (this._validCandles(c)) return c;
+    }
+
+    return null;
+  },
+
+  _validCandles(c) {
+    return !!(c && c.c && Array.isArray(c.c) && c.c.length >= 5 &&
+              c.s !== 'no_data' && c.c[0] > 0 && !isNaN(c.c[0]));
+  },
+
+  async yahooCandles(symbol, days = 220) {
+    try {
+      return await this._get(`/yahoo-candles/${encodeURIComponent(symbol)}?days=${days}`);
+    } catch(e) {
+      console.warn('[ApiClient] Yahoo candles failed for', symbol, ':', e.message);
+      return null;
+    }
+  },
+
+  async yahooQuote(symbol) {
+    try {
+      return await this._get(`/yahoo-quote/${encodeURIComponent(symbol)}`);
+    } catch(e) {
+      console.warn('[ApiClient] Yahoo quote failed for', symbol, ':', e.message);
+      return null;
+    }
   },
 };
 
@@ -2506,11 +2552,22 @@ const APP = {
     const tfMap = { '1D': 'D', '1W': 'W', '1M': 'M', '3M': '3M', '1Y': '12M', '5Y': '60M' };
     const tvTf  = tfMap[tf] || 'D';
 
-    container.innerHTML = `
-`;
+    // Show brief loading state then render TradingView chart
+    container.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg2);color:var(--tx3);font-size:12px;flex-direction:column;gap:8px"><div class="pw-spinner"></div><span>Loading chart…</span></div>`;
+
+    setTimeout(() => {
+      if (!container.isConnected) return;
+      container.innerHTML = `<iframe
+        src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(tvSymbol)}&interval=${tvTf}&theme=dark&style=1&locale=en&toolbar_bg=%230d1219&enable_publishing=false&hide_top_toolbar=false&hide_legend=false&save_image=false&backgroundColor=%23080c10&gridLineColor=%231e2a38&candleUpColor=%2300d4aa&candleDownColor=%23ff4d6d&borderUpColor=%2300d4aa&borderDownColor=%23ff4d6d&wickUpColor=%2300d4aa&wickDownColor=%23ff4d6d"
+        style="width:100%;height:100%;border:none;"
+        allowtransparency="true"
+        scrolling="no"
+        allowfullscreen
+      ></iframe>`;
+    }, 150);
 
     // Also update the price widget with API symbol (not TV symbol)
-    this.loadPriceWidget(resolved.apiSymbol);
+    if (resolved?.apiSymbol) this.loadPriceWidget(resolved.apiSymbol);
   },
 
   // ── PRICE WIDGET (chart sidebar) ─────────────────────────────────────────
@@ -5160,12 +5217,12 @@ Do NOT guess any prices, metrics, or financial data. Keep response under 50 word
 
     const f = (v, s = '') => v != null && v !== 0 ? `${Number(v).toFixed(2)}${s}` : 'N/A';
 
-    // Fetch candle data best-effort — uses provider fallback for international stocks
+    // Fetch candle data — Finnhub primary, Yahoo Finance fallback
     let candles = null;
     try {
       const resolvedForCandles = this.resolveSymbol(symbol);
       candles = await ApiClient.candlesWithFallback(resolvedForCandles, 220);
-      if (!candles?.c?.length || candles.s === 'no_data') candles = null;
+      if (!ApiClient._validCandles(candles)) candles = null;
     } catch(e) { candles = null; }
 
     // Compute enhanced data — pass candles for real RSI/MACD/MA
