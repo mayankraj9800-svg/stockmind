@@ -4130,10 +4130,12 @@ RESPOND WITH:
         boeing:'BA', lockheed:'LMT', 'lockheed martin':'LMT',
         raytheon:'RTX', northrop:'NOC', 'general dynamics':'GD',
         'l3harris':'LHX', 'textron':'TXT', 'heico':'HEI',
-        'transdigm':'TDG', spacex:''  // SpaceX is private — no ticker, 'virgin galactic':'VIRG',  // check current ticker
+        'transdigm':'TDG',
+        'spacex':'',
+        'virgin galactic':'VIRG',
 
         // ── Real Estate / REITs ───────────────────────────────────────────
-        realty:'O', 'american tower':'AMT', prologis:'PLD',
+        'realty income':'O','american tower':'AMT','prologis':'PLD',
         'simon property':'SPG', 'crown castle':'CCI', equinix:'EQIX',
         'digital realty':'DLR', 'public storage':'PSA',
         'extra space':'EXR', 'invitation homes':'INVH',
@@ -4706,11 +4708,11 @@ RESPOND WITH:
         document.getElementById('chatMsgs').appendChild(errDiv);
         document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
       }
-    }
     } finally {
       this._chatBusy = false;
       const sBtnF = document.getElementById('sBtn');
       if (sBtnF) { sBtnF.disabled = false; sBtnF.textContent = 'Analyse →'; }
+    }
   },
 
   // ── AI RESPONSE FORMATTER — Bloomberg section renderer ────────────────────
