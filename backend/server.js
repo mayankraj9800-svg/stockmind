@@ -16,15 +16,22 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'null')
 // ── EXPRESS ───────────────────────────────────────────────────────────────────
 const app = express();
 
-// CORS
+// CORS — allow Netlify, localhost, and any origin in ALLOWED_ORIGINS
 app.use(cors({
   origin(origin, callback) {
+    // No origin = same-origin or server-to-server — always allow
     if (!origin) return callback(null, true);
-    if (origin === 'null' || origin.includes('localhost') || origin.includes('127.0.0.1'))
+    // Always allow localhost and 127.0.0.1
+    if (origin.includes('localhost') || origin.includes('127.0.0.1'))
       return callback(null, true);
-    if (ALLOWED_ORIGINS.some(o => origin.includes(o.replace('https://', '').replace('http://', ''))))
+    // Always allow any netlify.app subdomain
+    if (origin.includes('netlify.app'))
       return callback(null, true);
-    logger.warn(`Blocked CORS from: ${origin}`);
+    // Allow any origin listed in ALLOWED_ORIGINS env var
+    if (ALLOWED_ORIGINS.length > 0 &&
+        ALLOWED_ORIGINS.some(o => origin.includes(o.replace(/https?:\/\//, ''))))
+      return callback(null, true);
+    // Block everything else
     callback(new Error(`CORS: origin '${origin}' not allowed`));
   },
   methods:          ['GET', 'POST', 'OPTIONS'],
