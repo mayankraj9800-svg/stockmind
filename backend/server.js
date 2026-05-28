@@ -28,7 +28,7 @@ app.use(cors({
     callback(new Error(`CORS: origin '${origin}' not allowed`));
   },
   methods:          ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders:   ['Content-Type', 'Authorization', 'x-finnhub-key'],
+  allowedHeaders:   ['Content-Type', 'Authorization', 'x-finnhub-key', 'x-groq-key'],
   optionsSuccessStatus: 200,
 }));
 
