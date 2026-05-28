@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>StockMind AI Pro — Live Data × AI Analysis</title>
+<title>StockMind AI Pro v4 — Semantic Intelligence × Global Markets</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <!-- Firebase SDKs -->
@@ -661,11 +661,19 @@ html, body {
 #toast.error   { border-color: rgba(255,77,109,.4); color: var(--rd); }
 
 /* ── RESPONSIVE ────────────────────────────────────────── */
-/* Global overflow guard */
-html { overflow-x: hidden; }
-body { overflow-x: hidden; max-width: 100vw; }
-* { max-width: 100%; }
-img, video, iframe { max-width: 100%; }
+/* Global overflow guard — comprehensive mobile stability */
+html { overflow-x: hidden; -webkit-text-size-adjust: 100%; }
+body { overflow-x: hidden; max-width: 100vw; -webkit-overflow-scrolling: touch; }
+*, *::before, *::after { max-width: 100%; box-sizing: border-box; }
+img, video, iframe { max-width: 100%; height: auto; }
+/* Prevent text overflow on message bubbles, cards */
+.msg, .bubble, .ai-section, .card, .wl-card, .scanner-card, .alert-item {
+  overflow-wrap: break-word; word-break: break-word; hyphens: auto;
+}
+/* Smooth touch scrolling */
+.panel-scroll, .chat-msgs, .sb, .panel, .tabs { -webkit-overflow-scrolling: touch; }
+/* Fix inputs on mobile */
+input, select, textarea, button { max-width: 100%; }
 
 @media(max-width:900px) {
   .sb { display: none; }
@@ -677,6 +685,8 @@ img, video, iframe { max-width: 100%; }
   .brief-grid { grid-template-columns: 1fr; }
 }
 @media(max-width:680px) {
+  .sb { display:none !important; }
+  #sbToggleBtn { display:inline-block !important; }
   .topbar { padding: 0 10px; gap: 6px; }
   .ticker-bar { display: none; }
   .panel-scroll { padding: 10px 12px; }
@@ -849,6 +859,12 @@ img, video, iframe { max-width: 100%; }
   border-left: 3px solid var(--border2); background: var(--bg2);
   transition: border-color .2s, background .2s;
 }
+/* Swing trading specific section styles */
+.sec-swing-setup { border-left-color: var(--ac); }
+.sec-entry       { border-left-color: var(--gn); }
+.sec-stoploss    { border-left-color: var(--rd); }
+.sec-targets     { border-left-color: var(--am); }
+.sec-momentum    { border-left-color: var(--ac2); }
 .ai-section:hover { border-left-color: var(--ac); }
 .ai-sec-label {
   font-family: 'Syne', sans-serif; font-size: 9px; font-weight: 700;
@@ -948,6 +964,8 @@ img, video, iframe { max-width: 100%; }
   .tab { min-width: max-content; font-size: 10px; padding: 10px 10px; }
 }
 @media(max-width:680px) {
+  .sb { display:none !important; }
+  #sbToggleBtn { display:inline-block !important; }
   .topbar { padding: 0 10px; gap: 6px; }
   .ticker-bar { display: none; }
   .panel-scroll { padding: 10px 12px; }
@@ -1036,7 +1054,8 @@ img, video, iframe { max-width: 100%; }
   <!-- TOP BAR -->
   <div class="topbar">
     <div class="topbar-left">
-      <div class="brand"><span>StockMind</span> AI Pro<small>v4.0</small></div>
+      <button id="sbToggleBtn" onclick="APP.toggleSidebar()" style="display:none;background:none;border:none;color:var(--tx1);font-size:18px;cursor:pointer;padding:0 8px;margin-right:4px" title="Toggle sidebar">☰</button>
+      <div class="brand"><span>StockMind</span> AI Pro<small>v4.0 — Semantic</small></div>
     </div>
     <div class="ticker-bar" id="tickerBar">
       <div class="ticker-track" id="tickerTrack">
@@ -1098,32 +1117,66 @@ img, video, iframe { max-width: 100%; }
       <hr class="sb-hr"/>
       <div class="sb-section">
         <div class="sb-label">🇮🇳 India (NSE)</div>
-        <button class="sb-btn" data-sym="NSE:RELIANCE">RELIANCE.NS</button>
-        <button class="sb-btn" data-sym="NSE:TCS">TCS.NS</button>
-        <button class="sb-btn" data-sym="NSE:HDFCBANK">HDFCBANK.NS</button>
-        <button class="sb-btn" data-sym="NSE:INFY">INFY.NS</button>
-        <button class="sb-btn" data-sym="NSE:BAJFINANCE">BAJFINANCE.NS</button>
+        <button class="sb-btn" data-sym="RELIANCE">RELIANCE</button>
+        <button class="sb-btn" data-sym="TCS">TCS</button>
+        <button class="sb-btn" data-sym="HDFCBANK">HDFC Bank</button>
+        <button class="sb-btn" data-sym="INFY">Infosys</button>
+        <button class="sb-btn" data-sym="BAJFINANCE">Bajaj Finance</button>
+        <button class="sb-btn" data-sym="TATAMOTORS">Tata Motors</button>
+        <button class="sb-btn" data-sym="ZOMATO">Zomato</button>
+        <button class="sb-btn" data-sym="ICICIBANK">ICICI Bank</button>
+        <button class="sb-btn" data-sym="SBIN">SBI</button>
+        <button class="sb-btn" data-sym="ITC">ITC</button>
+        <button class="sb-btn" data-sym="ADANIENT">Adani Ent.</button>
+        <button class="sb-btn" data-sym="LT">L&T</button>
+        <button class="sb-btn" data-sym="MARUTI">Maruti</button>
       </div>
       <hr class="sb-hr"/>
       <div class="sb-section">
-        <div class="sb-label">🇬🇧 UK / FTSE</div>
-        <button class="sb-btn" data-sym="LSE:BP">BP.L</button>
-        <button class="sb-btn" data-sym="LSE:SHEL">Shell.L</button>
-        <button class="sb-btn" data-sym="LSE:AZN">AstraZeneca</button>
-        <button class="sb-btn" data-sym="LSE:HSBA">HSBC</button>
+        <div class="sb-label">🇬🇧 UK / Europe (US ADR)</div>
+        <button class="sb-btn" data-sym="BP">BP</button>
+        <button class="sb-btn" data-sym="SHEL">Shell</button>
+        <button class="sb-btn" data-sym="AZN">AstraZeneca</button>
+        <button class="sb-btn" data-sym="HSBC">HSBC</button>
+        <button class="sb-btn" data-sym="VOD">Vodafone</button>
+        <button class="sb-btn" data-sym="GSK">GSK</button>
+        <button class="sb-btn" data-sym="UL">Unilever</button>
+        <button class="sb-btn" data-sym="ASML">ASML</button>
+        <button class="sb-btn" data-sym="SAP">SAP</button>
+        <button class="sb-btn" data-sym="NVS">Novartis</button>
+        <button class="sb-btn" data-sym="SIEGY">Siemens</button>
+        <button class="sb-btn" data-sym="TTE">TotalEnergies</button>
+        <button class="sb-btn" data-sym="SNY">Sanofi</button>
+        <button class="sb-btn" data-sym="EADSY">Airbus</button>
       </div>
       <hr class="sb-hr"/>
       <div class="sb-section">
-        <div class="sb-label">🇪🇺 Europe</div>
-        <button class="sb-btn" data-sym="NASDAQ:ASML">ASML</button>
-        <button class="sb-btn" data-sym="XETRA:SAP">SAP</button>
-        <button class="sb-btn" data-sym="XETRA:SIE">Siemens</button>
+        <div class="sb-label">🌏 Asia (US ADR)</div>
+        <button class="sb-btn" data-sym="TSM">TSMC</button>
+        <button class="sb-btn" data-sym="TM">Toyota</button>
+        <button class="sb-btn" data-sym="SONY">Sony</button>
+        <button class="sb-btn" data-sym="NTDOY">Nintendo</button>
+        <button class="sb-btn" data-sym="SFTBY">SoftBank</button>
+        <button class="sb-btn" data-sym="HMC">Honda</button>
+        <button class="sb-btn" data-sym="BABA">Alibaba</button>
+        <button class="sb-btn" data-sym="BIDU">Baidu</button>
+        <button class="sb-btn" data-sym="TCEHY">Tencent</button>
+        <button class="sb-btn" data-sym="JD">JD.com</button>
+        <button class="sb-btn" data-sym="NIO">NIO</button>
+        <button class="sb-btn" data-sym="SSNLF">Samsung</button>
+        <button class="sb-btn" data-sym="PKX">POSCO</button>
       </div>
       <hr class="sb-hr"/>
       <div class="sb-section">
-        <div class="sb-label">🌍 Africa / Other</div>
-        <button class="sb-btn" data-sym="JSE:MTN">MTN Group</button>
-        <button class="sb-btn" data-sym="JSE:NPN">Naspers</button>
+        <div class="sb-label">🌎 Americas (US listed)</div>
+        <button class="sb-btn" data-sym="BHP">BHP</button>
+        <button class="sb-btn" data-sym="RIO">Rio Tinto</button>
+        <button class="sb-btn" data-sym="VALE">Vale</button>
+        <button class="sb-btn" data-sym="PBR">Petrobras</button>
+        <button class="sb-btn" data-sym="ENB">Enbridge</button>
+        <button class="sb-btn" data-sym="RY">Royal Bank</button>
+        <button class="sb-btn" data-sym="TD">TD Bank</button>
+        <button class="sb-btn" data-sym="CNI">CN Rail</button>
       </div>
       <hr class="sb-hr"/>
       <div class="sb-signals">
@@ -1249,8 +1302,8 @@ img, video, iframe { max-width: 100%; }
             <button class="qc" data-ask="Should I buy NVDA right now?">Buy NVDA?</button>
             <button class="qc" data-ask="Analyse TSLA — is it overbought?">TSLA overbought?</button>
             <button class="qc" data-ask="Compare MSFT and GOOGL">MSFT vs GOOGL</button>
-            <button class="qc" data-ask="Analyse META stock">META analysis</button>
-            <button class="qc" data-ask="Analyse AMD">AMD signal</button>
+            <button class="qc" data-ask="Analyse Reliance Industries">Reliance</button>
+            <button class="qc" data-ask="Find me US swing-trading stocks with momentum">US Swing Scan</button>
           </div>
           <div class="chat-input-row">
             <input class="chat-input" id="cin" placeholder="Ask about any stock — I'll fetch live data via backend first…"/>
@@ -1262,13 +1315,18 @@ img, video, iframe { max-width: 100%; }
         </div>
         <div class="chat-ctx">
           <div class="ctx-section">
-            <div class="ctx-title">QUICK STOCKS</div>
+            <div class="ctx-title">🇺🇸 US STOCKS</div>
             <button class="sb-btn ctx-ask" data-ask="Analyse AAPL">🍎 Apple (AAPL)</button>
             <button class="sb-btn ctx-ask" data-ask="Analyse NVDA">🎮 Nvidia (NVDA)</button>
             <button class="sb-btn ctx-ask" data-ask="Analyse MSFT">🪟 Microsoft (MSFT)</button>
             <button class="sb-btn ctx-ask" data-ask="Analyse TSLA">⚡ Tesla (TSLA)</button>
-            <button class="sb-btn ctx-ask" data-ask="Analyse META">📘 Meta (META)</button>
-            <button class="sb-btn ctx-ask" data-ask="Analyse AMZN">📦 Amazon (AMZN)</button>
+          </div>
+          <div class="ctx-section" style="border-top:1px solid var(--border)">
+            <div class="ctx-title">🇮🇳 INDIA NSE</div>
+            <button class="sb-btn ctx-ask" data-ask="Analyse Reliance Industries">⚡ Reliance</button>
+            <button class="sb-btn ctx-ask" data-ask="Analyse TCS">💻 TCS</button>
+            <button class="sb-btn ctx-ask" data-ask="Analyse HDFC Bank">🏦 HDFC Bank</button>
+            <button class="sb-btn ctx-ask" data-ask="Analyse Infosys">🖥 Infosys</button>
           </div>
           <div class="ctx-section" style="border-top:1px solid var(--border)">
             <div class="ctx-title">SESSION MEMORY</div>
@@ -1294,7 +1352,8 @@ img, video, iframe { max-width: 100%; }
         <div class="wl-toolbar">
           <input class="wl-input" id="wlin" placeholder="Add symbol (AAPL, TSLA…)"/>
           <button class="btn-add"     id="wlAddBtn">+ Add</button>
-          <button class="btn-outline" id="wlRefreshBtn">↻ Refresh Live</button>
+          <button class="btn-outline" id="wlRefreshBtn">↻ Refresh</button>
+          <span id="wlLastRefresh" style="font-size:9px;color:var(--tx3);align-self:center">Auto-refreshes every 60s</span>
           <button class="btn-pdf"     id="wlPdfBtn" style="margin-left:auto">📄 Export PDF</button>
         </div>
         <div class="wl-grid" id="wlGrid"></div>
@@ -1313,6 +1372,29 @@ img, video, iframe { max-width: 100%; }
           <button class="btn-add"     id="addPortBtn">+ Add Position</button>
           <button class="btn-outline" id="analysePortBtn">🤖 AI Analyse</button>
           <button class="btn-outline" id="refreshPortBtn">↻ Refresh Live</button>
+        </div>
+        <!-- Portfolio Health Score Cards -->
+        <div class="port-health" id="portHealthCards" style="display:none">
+          <div class="port-health-card">
+            <div class="phc-label">Total Value</div>
+            <div class="phc-val" id="phc-total" style="font-size:14px">—</div>
+          </div>
+          <div class="port-health-card">
+            <div class="phc-label">Total P&amp;L</div>
+            <div class="phc-val" id="phc-pnl">—</div>
+          </div>
+          <div class="port-health-card">
+            <div class="phc-label">Gainers</div>
+            <div class="phc-val good" id="phc-gainers">—</div>
+          </div>
+          <div class="port-health-card">
+            <div class="phc-label">Losers</div>
+            <div class="phc-val bad" id="phc-losers">—</div>
+          </div>
+          <div class="port-health-card">
+            <div class="phc-label">Risk Level</div>
+            <div class="phc-val warn" id="phc-risk">—</div>
+          </div>
         </div>
         <div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px">
           <table class="port-table">
@@ -1487,7 +1569,7 @@ img, video, iframe { max-width: 100%; }
       <div class="panel-header">
         <div>
           <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800">🔭 AI Market Scanner</div>
-          <div style="font-size:9px;color:var(--tx3);margin-top:2px">Live signal detection across key US & Indian stocks</div>
+          <div style="font-size:9px;color:var(--tx3);margin-top:2px">Scanning curated universe of ~80 stocks · 🇺🇸 US · 🇮🇳 India NSE · 🌍 Global ADRs · Live Finnhub data</div>
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn-gen" id="scanBtn" onclick="APP.runScanner()">⚡ Run AI Scan</button>
@@ -1626,7 +1708,7 @@ const CONFIG = {
     : 'https://stockmind-backend-mwqw.onrender.com/api',
   GROQ_URL:          'https://api.groq.com/openai/v1/chat/completions',
   GROQ_MODEL:        'llama-3.3-70b-versatile',
-  TICKER_SYMBOLS:    ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'TSLA', 'META', 'AMZN', 'AMD'],
+  TICKER_SYMBOLS:    ['AAPL','MSFT','NVDA','TSLA','GOOGL','META','AMZN','AMD','NFLX','CRM','JPM','V','LLY','TSM','INFY','SHEL','TM'],
   TICKER_REFRESH_MS: 30_000,
   HEALTH_CHECK_MS:   60_000,
   MAX_RETRIES:       2,
@@ -1737,6 +1819,59 @@ const ApiClient = {
       console.warn(`[ApiClient] Candles failed for ${symbol}:`, e.message);
       return null;
     }
+  },
+
+  // ── PROVIDER-AWARE QUOTE WITH FALLBACK ─────────────────────────────
+  // 1. Try apiSymbol (US ticker or .NS / ADR)
+  // 2. If empty (c=0 / null) AND a .NS fallback exists → retry
+  // 3. Returns {quote, symbolUsed, providerNote}
+  async quoteWithFallback(resolved) {
+    if (!resolved) return { quote: null, symbolUsed: null, providerNote: null };
+
+    // Primary attempt
+    let q = await this.quote(resolved.apiSymbol);
+
+    // Detect empty Finnhub response (c=0 means market closed/unsupported)
+    const isEmpty = !q || !q.c || q.c === 0;
+
+    if (isEmpty && resolved.nsFallback) {
+      console.log(`[ApiClient] ${resolved.apiSymbol} empty — trying NS fallback: ${resolved.nsFallback}`);
+      q = await this.quote(resolved.nsFallback);
+      if (q?.c) {
+        return { quote: q, symbolUsed: resolved.nsFallback, providerNote: `NSE: ${resolved.displaySymbol}` };
+      }
+    }
+
+    if (isEmpty && resolved.exchange === 'NSE') {
+      // Last resort: try Finnhub symbol search to find a valid symbol
+      console.log(`[ApiClient] ${resolved.apiSymbol} empty — trying search fallback`);
+      try {
+        const sres = await fetch(`${CONFIG.BACKEND_URL}/search/${encodeURIComponent(resolved.displaySymbol)}`,
+          { headers: this._headers() });
+        if (sres.ok) {
+          const sjson = await sres.json();
+          const hit = sjson.data?.find(r => r.type === 'Common Stock' && r.symbol);
+          if (hit) {
+            const sq = await this.quote(hit.symbol);
+            if (sq?.c) return { quote: sq, symbolUsed: hit.symbol, providerNote: `via search: ${hit.description || hit.symbol}` };
+          }
+        }
+      } catch(e) { /* silent */ }
+    }
+
+    const note = resolved.note ? `${resolved.exchange} · ${resolved.note}` : resolved.exchange;
+    return { quote: q, symbolUsed: resolved.apiSymbol, providerNote: isEmpty ? '⚠ Limited Finnhub coverage' : note };
+  },
+
+  // ── PROVIDER-AWARE CANDLES WITH FALLBACK ───────────────────────────
+  async candlesWithFallback(resolved, days = 220) {
+    if (!resolved) return null;
+    let c = await this.candles(resolved.apiSymbol, days);
+    // If primary fails and we have a .NS fallback, try that
+    if ((!c || !c.c?.length) && resolved.nsFallback) {
+      c = await this.candles(resolved.nsFallback, days);
+    }
+    return c;
   },
 };
 
@@ -2069,7 +2204,7 @@ const APP = {
         brand.insertAdjacentHTML('afterend',
           `<div style="font-size:10px;color:var(--tx3);margin-left:12px;display:flex;align-items:center;gap:8px">
             <span>${this.currentUser.email}</span>
-            <button onclick="APP.signOut()" style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--tx3);cursor:pointer;font-size:9px">Sign out</button>
+            <button id="signOutBtn" onclick="APP.signOut()" style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 6px;color:var(--tx3);cursor:pointer;font-size:9px">Sign out</button>
            </div>`
         );
       }
@@ -2083,10 +2218,38 @@ const APP = {
     // Phase 5/6 — init new systems
     this.initInvestorMode();
     this.loadUserPreferences();
+    // Background alert polling every 5 minutes
+    this._alertPollingInterval = setInterval(() => {
+      if (this.alerts.length > 0) {
+        this.checkAllAlerts().catch(() => {});
+      }
+    }, 5 * 60 * 1000);
+
+    // Watchlist auto-refresh every 60 seconds (if watchlist is active)
+    this._wlRefreshInterval = setInterval(() => {
+      if (this.state.watchlist.length > 0 && document.getElementById('panel-wl')?.style.display !== 'none') {
+        this.refreshWatchlist().catch(() => {});
+        // Update last-refreshed timestamp
+        const ts = document.getElementById('wlLastRefresh');
+        if (ts) ts.textContent = `Auto-refreshed ${new Date().toLocaleTimeString()}`;
+      }
+    }, 60 * 1000);
   },
 
   // ── SIGN OUT ──────────────────────────────────────────────────────────────
-  async signOut() {
+  toggleSidebar() {
+    const sb = document.querySelector('.sb');
+    if (!sb) return;
+    const hidden = sb.style.display === 'none' || getComputedStyle(sb).display === 'none';
+    sb.style.display = hidden ? 'flex' : 'none';
+  },
+
+    async signOut() {
+    // Clear all polling intervals before reload to prevent ghost callbacks
+    if (this._alertPollingInterval) clearInterval(this._alertPollingInterval);
+    if (this._wlRefreshInterval)    clearInterval(this._wlRefreshInterval);
+    if (this._healthInterval)       clearInterval(this._healthInterval);
+    if (this._tickerInterval)       clearInterval(this._tickerInterval);
     const { auth, signOut: fbSignOut } = window.FB;
     await fbSignOut(auth);
     location.reload();
@@ -2094,7 +2257,7 @@ const APP = {
 
   // ── HEALTH MONITOR ────────────────────────────────────────────────────────
   startHealthMonitor() {
-    setInterval(() => this.runHealthCheck(), CONFIG.HEALTH_CHECK_MS);
+    this._healthInterval = setInterval(() => this.runHealthCheck(), CONFIG.HEALTH_CHECK_MS);
   },
 
   async runHealthCheck() {
@@ -2218,9 +2381,11 @@ const APP = {
     document.querySelectorAll('.sb-btn[data-sym]').forEach(btn => {
       btn.addEventListener('click', e => {
         const sym = e.currentTarget.dataset.sym;
-        document.getElementById('chartSymInput').value = sym;
-        this.loadChart(sym, this.state.currentTf);
-        this.loadPriceWidget(sym);
+        // Resolve symbol: sidebar may pass NSE:RELIANCE format
+        const resolved = this.resolveSymbol(sym.includes(':') ? sym.split(':').pop() : sym);
+        const inputSym = resolved.displaySymbol;
+        document.getElementById('chartSymInput').value = inputSym;
+        this.loadChart(inputSym, this.state.currentTf || '1D');
         this.switchTab('chart');
       });
     });
@@ -2329,25 +2494,24 @@ const APP = {
   },
 
   // ── TRADINGVIEW CHART ─────────────────────────────────────────────────────
-  loadChart(symbol, tf = '1D') {
-    this.state.currentSymbol = symbol;
+  loadChart(rawSymbol, tf = '1D') {
+    this.state.currentSymbol = rawSymbol;
     const container = document.getElementById('tv-container');
     if (!container) return;
+
+    // Resolve to TradingView symbol format
+    const resolved  = this.resolveSymbol(rawSymbol);
+    // Fallback: if resolveSymbol returns null, use raw input for TV (best effort)
+    const tvSymbol  = resolved?.tradingviewSymbol || rawSymbol;
 
     const tfMap = { '1D': 'D', '1W': 'W', '1M': 'M', '3M': '3M', '1Y': '12M', '5Y': '60M' };
     const tvTf  = tfMap[tf] || 'D';
 
     container.innerHTML = `
-      <iframe
-        src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(symbol)}&interval=${tvTf}&theme=dark&style=1&locale=en&toolbar_bg=%230d1219&enable_publishing=false&hide_top_toolbar=false&hide_legend=false&save_image=false&backgroundColor=%23080c10&gridLineColor=%231e2a38&candleUpColor=%2300d4aa&candleDownColor=%23ff4d6d&borderUpColor=%2300d4aa&borderDownColor=%23ff4d6d&wickUpColor=%2300d4aa&wickDownColor=%23ff4d6d"
-        style="width:100%;height:100%;border:none;"
-        allowtransparency="true"
-        scrolling="no"
-        allowfullscreen
-      ></iframe>`;
+`;
 
-    // Also update the price widget
-    this.loadPriceWidget(symbol);
+    // Also update the price widget with API symbol (not TV symbol)
+    this.loadPriceWidget(resolved.apiSymbol);
   },
 
   // ── PRICE WIDGET (chart sidebar) ─────────────────────────────────────────
@@ -2355,14 +2519,21 @@ const APP = {
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     const badge = document.getElementById('pwLiveBadge');
 
-    set('pw-sym',   symbol);
+    const resolved = this.resolveSymbol(symbol);
+    const fetchSym = resolved?.apiSymbol || symbol;
+    const display  = resolved?.displaySymbol || symbol;
+
+    set('pw-sym',   display);
     set('pw-price', '…');
     if (badge) badge.innerHTML = '<span class="live-badge stale"><span class="pw-spinner"></span> LOADING</span>';
 
-    const [quote, profile] = await Promise.all([
-      ApiClient.quote(symbol),
-      ApiClient.profile(symbol),
+    // Use provider-aware fetch with fallback for international stocks
+    const [fallbackResult, profile] = await Promise.all([
+      ApiClient.quoteWithFallback(resolved),
+      ApiClient.profile(fetchSym),
     ]);
+    const quote = fallbackResult?.quote;
+    const providerNote = fallbackResult?.providerNote;
 
     if (!quote) {
       set('pw-price', 'N/A');
@@ -2396,7 +2567,11 @@ const APP = {
     set('ind-range', `$${quote.l?.toFixed(2)} – $${quote.h?.toFixed(2)}`);
 
     const freshEl = document.getElementById('pw-freshness');
-    if (freshEl) { freshEl.textContent = `Updated ${new Date().toLocaleTimeString()}`; freshEl.className = 'data-fresh live'; }
+    if (freshEl) {
+      const noteStr = providerNote ? ` · ${providerNote}` : '';
+      freshEl.textContent = `Updated ${new Date().toLocaleTimeString()}${noteStr}`;
+      freshEl.className = 'data-fresh live';
+    }
 
     if (badge) badge.innerHTML = '<span class="live-badge">● LIVE</span>';
     document.getElementById('chartSymInput').value = symbol;
@@ -2557,7 +2732,7 @@ Max 100 words.`;
     track.innerHTML = html;
 
     this.refreshTicker();
-    setInterval(() => this.refreshTicker(), CONFIG.TICKER_REFRESH_MS);
+    this._tickerInterval = setInterval(() => this.refreshTicker(), CONFIG.TICKER_REFRESH_MS);
   },
 
   async refreshTicker() {
@@ -2621,13 +2796,22 @@ Max 100 words.`;
     const btn = document.getElementById('fetchLiveBtn');
     btn.disabled = true; btn.textContent = 'Fetching…';
 
-    const [quote, profile] = await Promise.all([
-      ApiClient.quote(ticker),
-      ApiClient.profile(ticker),
+    const resolved = this.resolveSymbol(ticker);
+    const fetchSym = resolved?.apiSymbol || ticker;
+    const [fallbackResult, profile] = await Promise.all([
+      ApiClient.quoteWithFallback(resolved),
+      ApiClient.profile(fetchSym),
     ]);
+    const quote = fallbackResult?.quote;
     btn.disabled = false; btn.textContent = '📡 Fetch Live';
 
-    if (!quote) { this.toast(`❌ Could not fetch ${ticker} — check backend`); return; }
+    if (!quote?.c) {
+      const hint = resolved?.exchange !== 'US'
+        ? `${ticker} may have limited coverage on Finnhub free tier. Try the US ADR equivalent if available.`
+        : 'Check your Finnhub key and backend connection.';
+      this.toast(`⚠ No data for ${ticker} — ${hint}`);
+      return;
+    }
 
     if (profile?.name) document.getElementById('fco').value = profile.name;
 
@@ -2773,14 +2957,21 @@ Max 250 words. No invented data. If a metric is "Not provided", do not estimate 
 
   // ── STOCK COMPARISON ──────────────────────────────────────────────────────
   async compareStocks() {
-    const s1 = document.getElementById('cs1').value.trim().toUpperCase();
-    const s2 = document.getElementById('cs2').value.trim().toUpperCase();
-    const s3 = document.getElementById('cs3').value.trim().toUpperCase();
-    if (!s1 || !s2) { this.toast('Enter at least 2 tickers'); return; }
+    const s1raw = document.getElementById('cs1').value.trim().toUpperCase();
+    const s2raw = document.getElementById('cs2').value.trim().toUpperCase();
+    const s3raw = document.getElementById('cs3').value.trim().toUpperCase();
+    if (!s1raw || !s2raw) { this.toast('Enter at least 2 tickers'); return; }
 
     const btn = document.getElementById('cmpBtn');
     btn.disabled = true; btn.textContent = '⏳ Fetching live data…';
 
+    // Resolve to Finnhub-compatible API symbols
+    const res1 = this.resolveSymbol(s1raw);
+    const res2 = this.resolveSymbol(s2raw);
+    const res3 = s3raw ? this.resolveSymbol(s3raw) : null;
+    const s1 = res1?.apiSymbol || s1raw;
+    const s2 = res2?.apiSymbol || s2raw;
+    const s3 = res3?.apiSymbol || s3raw || null;
     const symbols = s3 ? [s1, s2, s3] : [s1, s2];
     const results = await ApiClient.batchQuotes(symbols);
     const bySymbol = Object.fromEntries(results.map(r => [r.symbol, r.quote]));
@@ -2801,33 +2992,13 @@ Max 250 words. No invented data. If a metric is "Not provided", do not estimate 
     const r2 = this.calculateRisk(null, q2, t2);
     const r3 = q3 ? this.calculateRisk(null, q3, t3) : null;
 
-    let prompt = `You are StockMind AI — institutional equity analyst. Compare these stocks using ONLY the verified live data. No fabricated metrics.
-
-VERIFIED LIVE DATA (Finnhub via backend):
-${s1}: $${q1.c?.toFixed(2)} | Day: ${q1.dp >= 0 ? '+' : ''}${q1.dp?.toFixed(2)}% | Range: $${q1.l?.toFixed(2)}–$${q1.h?.toFixed(2)} | Risk: ${r1.level} | ${t1.rsiNote || ''} | User notes: ${d1}
-${s2}: $${q2.c?.toFixed(2)} | Day: ${q2.dp >= 0 ? '+' : ''}${q2.dp?.toFixed(2)}% | Range: $${q2.l?.toFixed(2)}–$${q2.h?.toFixed(2)} | Risk: ${r2.level} | ${t2.rsiNote || ''} | User notes: ${d2}`;
-    if (q3) prompt += `\n${s3}: $${q3.c?.toFixed(2)} | Day: ${q3.dp >= 0 ? '+' : ''}${q3.dp?.toFixed(2)}% | Range: $${q3.l?.toFixed(2)}–$${q3.h?.toFixed(2)} | Risk: ${r3.level} | ${t3?.rsiNote || ''} | User notes: ${d3}`;
-
-    prompt += `
-
-RESPOND IN THIS EXACT FORMAT:
-📊 INDIVIDUAL ASSESSMENT
-${s1}: [2 sentences — price action, risk level, and what the data reveals]
-${s2}: [2 sentences — price action, risk level, and what the data reveals]
-${s3 ? s3 + ': [2 sentences — price action, risk level, and what the data reveals]' : ''}
-
-⚖ COMPARATIVE MOMENTUM
-[Which is showing strongest intraday momentum and relative strength today — cite specific % changes]
-
-🔴 RISK COMPARISON
-[Risk level comparison across the stocks — cite the risk factors from data above]
-
-🎯 RELATIVE VERDICT
-[Which stock presents the strongest technical setup TODAY based strictly on the verified data — be specific]
-
-⚠ Live price momentum analysis only — fundamental comparison requires verified financials. Not financial advice.
-
-Max 220 words. State "Insufficient data" for any section where notes are inadequate.`;
+    // Build institutional compare prompt with full data package
+    const stocksData = [
+      { symbol: s1, quote: q1, profile: null, metrics: null, technicals: t1, risk: r1 },
+      { symbol: s2, quote: q2, profile: null, metrics: null, technicals: t2, risk: r2 },
+    ];
+    if (q3) stocksData.push({ symbol: s3, quote: q3, profile: null, metrics: null, technicals: t3 || {}, risk: r3 });
+    const prompt = this.buildComparePromptV2(stocksData);
 
     const result = await this.callGroqAI(prompt);
     btn.disabled = false; btn.textContent = '⚖️ Fetch Live & Compare';
@@ -2957,6 +3128,42 @@ Max 220 words. State "Insufficient data" for any section where notes are inadequ
     ).join('');
 
     const results = await ApiClient.batchQuotes(this.state.portfolio.map(p => p.symbol));
+    // Update portfolio memory engine
+    this.portfolioMemory.update(this.state.portfolio, results);
+
+    // Populate health score cards
+    const healthCards = document.getElementById('portHealthCards');
+    if (healthCards && this.state.portfolio.length > 0) {
+      healthCards.style.display = 'grid';
+      const summary = this.portfolioMemory.getSummary();
+      if (summary) {
+        const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+        set('phc-total', `$${summary.total.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`);
+        set('phc-gainers', summary.gainers);
+        set('phc-losers', summary.losers);
+        // Calculate total P&L
+        const totalPL = this.portfolioMemory.holdings.reduce((s, h) =>
+          s + (h.pnl != null ? (h.pnl / 100) * (h.avg * h.qty) : 0), 0);
+        const plEl = document.getElementById('phc-pnl');
+        if (plEl) {
+          plEl.textContent = `${totalPL >= 0 ? '+' : ''}$${Math.abs(totalPL).toFixed(0)}`;
+          plEl.className = `phc-val ${totalPL >= 0 ? 'good' : 'bad'}`;
+        }
+        // Portfolio risk level (average)
+        const highRisk = this.portfolioMemory.holdings.filter(h => {
+          const tech = this.computeTechnicals(null, { c: h.livePrice, dp: 0 });
+          return this.calculateRisk(null, { c: h.livePrice, dp: 0 }, tech).level === 'High';
+        }).length;
+        const riskEl = document.getElementById('phc-risk');
+        if (riskEl) {
+          const riskLevel = highRisk / this.state.portfolio.length > 0.5 ? 'High' :
+                            highRisk > 0 ? 'Mixed' : 'Low';
+          riskEl.textContent = riskLevel;
+          riskEl.className = `phc-val ${riskLevel === 'High' ? 'bad' : riskLevel === 'Mixed' ? 'warn' : 'good'}`;
+        }
+      }
+    }
+
     for (const r of results) {
       const row = document.getElementById(`portrow-${r.symbol}`);
       const pos = this.state.portfolio.find(p => p.symbol === r.symbol);
@@ -3044,18 +3251,621 @@ Max 250 words. Only reference the positions and data listed above.`;
     document.getElementById('portAnalysis').style.display = 'block';
   },
 
+
+  // ════════════════════════════════════════════════════════════════
+  // SEMANTIC AI ROUTING ENGINE v4.0
+  // Sections 2-6 of the architectural spec
+  // ════════════════════════════════════════════════════════════════
+
+  // ── RESERVED FINANCE TERMS — never treated as tickers ────────────
+  RESERVED_FINANCE_TERMS: new Set([
+    // Technical indicators
+    'RSI','MACD','EMA','SMA','VWAP','ATR','ADX','CCI','OBV','SAR',
+    'BB','BOLL','STOCH','DMI','AROON','MFI','ROC','TRIX',
+    'MA50','MA200','MA20','MA100','EMA9','EMA21',
+    // Fundamental metrics
+    'PEG','EPS','ROE','ROA','ROIC','ROI','DCF','FCF','EBITDA',
+    'PE','PB','PS','PD','EV','NI','TTM','YOY','QOQ','MOM',
+    'NAV','NTA','BPS','DPS','AUM','XIRR','CAGR','IRR','NPV',
+    'WACC','DSCR','OCF','CAPEX','OPEX','EBIT','NOPAT',
+    // Market terms
+    'ETF','IPO','FPO','OFS','NFO','SIP','MF','PMS','AIF',
+    'GDP','CPI','WPI','PMI','IIP','REPO','SLR','CRR','PLR','MCLR',
+    'FDI','FII','DII','FPI','QIB','HNI','RII','NRI',
+    // Chart/data
+    'OHLCV','OHLC','HLC','HL','LH',
+    // General finance
+    'BULL','BEAR','LONG','SHORT','CALL','PUT','SWAP','BOND','NOTE',
+    // Exchanges/indexes (not tickers)
+    'NYSE','NASDAQ','AMEX','LSE','TSX','ASX','SGX','HKEX',
+    'NIFTY','SENSEX','BSE','NSE','MCX','SEBI','RBI','IRDAI',
+    // Time periods
+    'YTD','MTD','QTD','FYTD','52W','52WH','52WL','ATH','ATL',
+    // Common conversational terms that match ticker regex
+    'HI','LO','UP','DN','VS','RE','OR','IF','OF','ON','NO','TO',
+    'OK','GO','SO','AS','BY','WE',
+    // Common words
+    'AI','THE','FOR','AND','BUY','NOT','GET','CAN',
+    'USD','DAY','NOW','HOW','WHY','WHO','ARE','HAS','ITS','ALL','TOP',
+    'NEW','OLD','USE','ANY','ONE','TWO','MY','ME','IS','IT','IN','UP',
+    'DO','AT','BE','ANALYSE','ANALYZE','TELL','SHOW','WHAT','GIVE',
+    'STOCK','PRICE','DATA','INFO','ABOUT','TODAY','CURRENT','LATEST',
+    'HIGH','LOW','OPEN','CLOSE','VOLUME','MARKET','SECTOR','INDUSTRY',
+  ]),
+
+  // ── MARKET REGION TERMS — never treated as tickers ─────────────
+  MARKET_REGION_TERMS: new Set([
+    // Americas
+    'US','USA','AMERICAN','AMERICA','CANADIAN','CANADA','BRAZILIAN','BRAZIL',
+    'LATAM','LATIN','MEXICAN','MEXICO','ARGENTINIAN','CHILEAN',
+    // Europe
+    'UK','BRITISH','BRITAIN','ENGLAND','SCOTLAND','WELSH',
+    'EUROPE','EUROPEAN','EU','EURO','EUROZONE',
+    'GERMAN','GERMANY','FRENCH','FRANCE','DUTCH','NETHERLANDS','HOLLAND',
+    'SWISS','SWITZERLAND','SPANISH','SPAIN','ITALIAN','ITALY',
+    'NORDIC','SCANDINAVIAN','SWEDISH','DENMARK','NORWEGIAN','FINNISH',
+    'POLISH','PORTUGUESE','BELGIAN','AUSTRIAN',
+    // Asia-Pacific
+    'INDIA','INDIAN','INR','NSE','BSE','SENSEX','NIFTY',
+    'JAPAN','JAPANESE','JPY','NIKKEI',
+    'CHINA','CHINESE','CNY','YUAN','HONGKONG','HKEX','HK','HONG',
+    'KOREA','KOREAN','SOUTH','KRW','KOSPI','KOSDAQ',
+    'TAIWAN','TAIWANESE','TWD','TSE',
+    'AUSTRALIA','AUSTRALIAN','AUD','ASX',
+    'SINGAPORE','SINGAPOREAN','SGD','SGX',
+    'THAILAND','THAI','INDONESIA','INDONESIAN','VIETNAM','VIETNAMESE',
+    'MALAYSIA','MALAYSIAN','PHILIPPINES','FILIPINO',
+    // Global
+    'GLOBAL','WORLD','INTERNATIONAL','WORLDWIDE',
+    'EMERGING','FRONTIER','DEVELOPED',
+    'ASIA','ASIAN','PACIFIC','APAC',
+    'AFRICA','AFRICAN','MIDDLE','EAST','MENA',
+    'GCC','GULF','SAUDI','EMIRATI','UAE','DUBAI',
+  ]),
+
+  // ── GLOBAL SYMBOL RESOLUTION ENGINE ─────────────────────────────
+  // Converts any ticker/name into exchange-aware symbols
+  // ════════════════════════════════════════════════════════════════
+  // GLOBAL SYMBOL RESOLUTION ENGINE — Finnhub-verified
+  // Strategy:
+  //   US stocks    → direct ticker (AAPL, NVDA) — Finnhub fully supports
+  //   Indian stocks → ADR first if one exists (more reliable on free tier)
+  //                   .NS suffix as primary when no ADR exists
+  //   UK stocks    → NYSE-listed ADR first where available (.L as fallback)
+  //   European/Asian → US ADR where available, else note limitation
+  // TradingView symbols are kept SEPARATE from API symbols.
+  // NSE: / XETR: prefixes are TradingView-only — never sent to Finnhub.
+  // ════════════════════════════════════════════════════════════════
+
+  // ── ADR MAP: non-US stocks that trade on US exchanges ─────────────
+  // These are MORE reliable on Finnhub free tier than .NS/.L suffixes.
+  // Primary = US ADR ticker | nsFallback = .NS to try if ADR also fails
+  _ADR_MAP: {
+    // ── Indian companies with US ADRs ────────────────────────────────
+    'INFOSYS':    { api:'INFY',  tv:'NASDAQ:INFY', exchange:'NASDAQ', note:'NYSE ADR' },
+    'INFY':       { api:'INFY',  tv:'NASDAQ:INFY', exchange:'NASDAQ', note:'NYSE ADR' },
+    'WIPRO':      { api:'WIT',   tv:'NYSE:WIT',    exchange:'NYSE',   note:'NYSE ADR' },
+    'WIT':        { api:'WIT',   tv:'NYSE:WIT',    exchange:'NYSE',   note:'NYSE ADR' },
+    'HDFCBANK':   { api:'HDB',   tv:'NYSE:HDB',    exchange:'NYSE',   note:'NYSE ADR', nsFallback:'HDFCBANK.NS' },
+    'HDB':        { api:'HDB',   tv:'NYSE:HDB',    exchange:'NYSE',   note:'NYSE ADR' },
+    'ICICIBANK':  { api:'IBN',   tv:'NYSE:IBN',    exchange:'NYSE',   note:'NYSE ADR', nsFallback:'ICICIBANK.NS' },
+    'IBN':        { api:'IBN',   tv:'NYSE:IBN',    exchange:'NYSE',   note:'NYSE ADR' },
+    'TATAMOTORS': { api:'TTM',   tv:'NYSE:TTM',    exchange:'NYSE',   note:'NYSE ADR', nsFallback:'TATAMOTORS.NS' },
+    'TTM':        { api:'TTM',   tv:'NYSE:TTM',    exchange:'NYSE',   note:'NYSE ADR' },
+    'DRREDDY':    { api:'RDY',   tv:'NYSE:RDY',    exchange:'NYSE',   note:'NYSE ADR', nsFallback:'DRREDDY.NS' },
+    'RDY':        { api:'RDY',   tv:'NYSE:RDY',    exchange:'NYSE',   note:'NYSE ADR' },
+    'HDFC':       { api:'HDB',   tv:'NYSE:HDB',    exchange:'NYSE',   note:'NYSE ADR (HDB)' },
+    'MPHASIS':    { api:'MPHY',  tv:'NASDAQ:MPHY', exchange:'NASDAQ', note:'US listed', nsFallback:'MPHASIS.NS' },
+    // ── UK/European companies with US listings ───────────────────────
+    'BP':         { api:'BP',    tv:'NYSE:BP',     exchange:'NYSE',   note:'NYSE listed' },
+    'SHEL':       { api:'SHEL',  tv:'NYSE:SHEL',   exchange:'NYSE',   note:'NYSE listed' },
+    'AZN':        { api:'AZN',   tv:'NASDAQ:AZN',  exchange:'NASDAQ', note:'NASDAQ ADR' },
+    'ASTRAZENECA':{ api:'AZN',   tv:'NASDAQ:AZN',  exchange:'NASDAQ', note:'NASDAQ ADR' },
+    'GSK':        { api:'GSK',   tv:'NYSE:GSK',    exchange:'NYSE',   note:'NYSE ADR' },
+    'GLAXO':      { api:'GSK',   tv:'NYSE:GSK',    exchange:'NYSE',   note:'NYSE ADR' },
+    'ULVR':       { api:'UL',    tv:'NYSE:UL',     exchange:'NYSE',   note:'NYSE ADR' },
+    'UNILEVER':   { api:'UL',    tv:'NYSE:UL',     exchange:'NYSE',   note:'NYSE ADR' },
+    'RIO':        { api:'RIO',   tv:'NYSE:RIO',    exchange:'NYSE',   note:'NYSE ADR' },
+    'HSBA':       { api:'HSBC',  tv:'NYSE:HSBC',   exchange:'NYSE',   note:'NYSE ADR' },
+    'HSBC':       { api:'HSBC',  tv:'NYSE:HSBC',   exchange:'NYSE',   note:'NYSE ADR' },
+    'VOD':        { api:'VOD',   tv:'NASDAQ:VOD',  exchange:'NASDAQ', note:'NASDAQ ADR' },
+    'VODAFONE':   { api:'VOD',   tv:'NASDAQ:VOD',  exchange:'NASDAQ', note:'NASDAQ ADR' },
+    'BCS':        { api:'BCS',   tv:'NYSE:BCS',    exchange:'NYSE',   note:'Barclays ADR' },
+    'BARC':       { api:'BCS',   tv:'NYSE:BCS',    exchange:'NYSE',   note:'Barclays ADR' },
+    'ASML':       { api:'ASML',  tv:'NASDAQ:ASML', exchange:'NASDAQ', note:'NASDAQ listed' },
+    'SAP':        { api:'SAP',   tv:'NYSE:SAP',    exchange:'NYSE',   note:'NYSE listed' },
+    'NVS':        { api:'NVS',   tv:'NYSE:NVS',    exchange:'NYSE',   note:'Novartis ADR' },
+    'NOVARTIS':   { api:'NVS',   tv:'NYSE:NVS',    exchange:'NYSE',   note:'Novartis ADR' },
+    'RHHBY':      { api:'RHHBY', tv:'NASDAQ:RHHBY',exchange:'NASDAQ', note:'Roche ADR' },
+    'SONY':       { api:'SONY',  tv:'NYSE:SONY',   exchange:'NYSE',   note:'NYSE ADR' },
+    'TM':         { api:'TM',    tv:'NYSE:TM',     exchange:'NYSE',   note:'Toyota ADR' },
+    'TOYOTA':     { api:'TM',    tv:'NYSE:TM',     exchange:'NYSE',   note:'Toyota ADR' },
+    'BABA':       { api:'BABA',  tv:'NYSE:BABA',   exchange:'NYSE',   note:'NYSE listed' },
+    'ALIBABA':    { api:'BABA',  tv:'NYSE:BABA',   exchange:'NYSE',   note:'NYSE listed' },
+    'BIDU':       { api:'BIDU',  tv:'NASDAQ:BIDU', exchange:'NASDAQ', note:'NASDAQ ADR' },
+    'BAIDU':      { api:'BIDU',  tv:'NASDAQ:BIDU', exchange:'NASDAQ', note:'NASDAQ ADR' },
+    'JD':         { api:'JD',    tv:'NASDAQ:JD',   exchange:'NASDAQ', note:'NASDAQ listed' },
+    'NIO':        { api:'NIO',   tv:'NYSE:NIO',    exchange:'NYSE',   note:'NYSE listed' },
+    'SHOP':       { api:'SHOP',  tv:'NYSE:SHOP',   exchange:'NYSE',   note:'NYSE listed' },
+    'SHOPIFY':    { api:'SHOP',  tv:'NYSE:SHOP',   exchange:'NYSE',   note:'NYSE listed' },
+
+    // ── Semiconductors / Hardware ────────────────────────────────────
+    'TSM':        { api:'TSM',   tv:'NYSE:TSM',    exchange:'NYSE',   note:'TSMC ADR' },
+    'TSMC':       { api:'TSM',   tv:'NYSE:TSM',    exchange:'NYSE',   note:'TSMC ADR' },
+    'SAMSUNG':    { api:'SSNLF', tv:'NASDAQ:SSNLF',exchange:'OTC',    note:'OTC ADR' },
+    'SSNLF':      { api:'SSNLF', tv:'NASDAQ:SSNLF',exchange:'OTC',    note:'OTC ADR' },
+    'LG':         { api:'LPL',   tv:'NYSE:LPL',    exchange:'NYSE',   note:'LG ADR' },
+    'CANON':      { api:'CAJ',   tv:'NYSE:CAJ',    exchange:'NYSE',   note:'NYSE ADR' },
+    'CAJ':        { api:'CAJ',   tv:'NYSE:CAJ',    exchange:'NYSE',   note:'NYSE ADR' },
+    'PANASONIC':  { api:'PCRFY', tv:'NASDAQ:PCRFY',exchange:'OTC',    note:'OTC ADR' },
+    'KEYENCE':    { api:'KYCCF', tv:'NASDAQ:KYCCF',exchange:'OTC',    note:'OTC ADR' },
+    'MURATA':     { api:'MRAAY', tv:'NASDAQ:MRAAY',exchange:'OTC',    note:'OTC ADR' },
+
+
+    // ── European companies ────────────────────────────────────────────
+    'VOLKSWAGEN': { api:'VWAGY', tv:'NASDAQ:VWAGY',exchange:'OTC',    note:'OTC ADR' },
+    'VWAGY':      { api:'VWAGY', tv:'NASDAQ:VWAGY',exchange:'OTC',    note:'OTC ADR' },
+    'VW':         { api:'VWAGY', tv:'NASDAQ:VWAGY',exchange:'OTC',    note:'OTC ADR' },
+    'BMW':        { api:'BMWYY', tv:'NASDAQ:BMWYY',exchange:'OTC',    note:'OTC ADR' },
+    'BMWYY':      { api:'BMWYY', tv:'NASDAQ:BMWYY',exchange:'OTC',    note:'OTC ADR' },
+    'MERCEDES':   { api:'MBGYY', tv:'NASDAQ:MBGYY',exchange:'OTC',    note:'OTC ADR' },
+    'DAIMLER':    { api:'MBGYY', tv:'NASDAQ:MBGYY',exchange:'OTC',    note:'OTC ADR' },
+    'SIEMENS':    { api:'SIEGY', tv:'NASDAQ:SIEGY',exchange:'OTC',    note:'OTC ADR' },
+    'SIEGY':      { api:'SIEGY', tv:'NASDAQ:SIEGY',exchange:'OTC',    note:'OTC ADR' },
+    'ABB':        { api:'ABB',   tv:'NYSE:ABB',    exchange:'NYSE',   note:'NYSE listed' },
+    'BASF':       { api:'BASFY', tv:'NASDAQ:BASFY',exchange:'OTC',    note:'OTC ADR' },
+    'BAYER':      { api:'BAYRY', tv:'NASDAQ:BAYRY',exchange:'OTC',    note:'OTC ADR' },
+    'ADIDAS':     { api:'ADDYY', tv:'NASDAQ:ADDYY',exchange:'OTC',    note:'OTC ADR' },
+    'ADDYY':      { api:'ADDYY', tv:'NASDAQ:ADDYY',exchange:'OTC',    note:'OTC ADR' },
+    'DEUTSCHE':   { api:'DB',    tv:'NYSE:DB',     exchange:'NYSE',   note:'NYSE ADR' },
+    'DB':         { api:'DB',    tv:'NYSE:DB',     exchange:'NYSE',   note:'NYSE ADR' },
+    'ING':        { api:'ING',   tv:'NYSE:ING',    exchange:'NYSE',   note:'NYSE ADR' },
+    'ALLIANZ':    { api:'AZSEY', tv:'NASDAQ:AZSEY',exchange:'OTC',    note:'OTC ADR' },
+    'AIRBUS':     { api:'EADSY', tv:'NASDAQ:EADSY',exchange:'OTC',    note:'OTC ADR' },
+    'EADSY':      { api:'EADSY', tv:'NASDAQ:EADSY',exchange:'OTC',    note:'OTC ADR' },
+    'PHILIPS':    { api:'PHG',   tv:'NYSE:PHG',    exchange:'NYSE',   note:'NYSE ADR' },
+    'PHG':        { api:'PHG',   tv:'NYSE:PHG',    exchange:'NYSE',   note:'NYSE ADR' },
+    'ADYEN':      { api:'ADYEY', tv:'NASDAQ:ADYEY',exchange:'OTC',    note:'OTC ADR' },
+    'HERMES':     { api:'HESAY', tv:'NASDAQ:HESAY',exchange:'OTC',    note:'OTC ADR' },
+    'LVMH':       { api:'LVMUY', tv:'NASDAQ:LVMUY',exchange:'OTC',    note:'OTC ADR' },
+    'LOREAL':     { api:'LRLCY', tv:'NASDAQ:LRLCY',exchange:'OTC',    note:'OTC ADR' },
+    'SANOFI':     { api:'SNY',   tv:'NASDAQ:SNY',  exchange:'NASDAQ', note:'NASDAQ ADR' },
+    'SNY':        { api:'SNY',   tv:'NASDAQ:SNY',  exchange:'NASDAQ', note:'NASDAQ ADR' },
+    'BNPPARIBAS': { api:'BNPQY', tv:'NASDAQ:BNPQY',exchange:'OTC',   note:'OTC ADR' },
+    'TOTALE':     { api:'TTE',   tv:'NYSE:TTE',    exchange:'NYSE',   note:'NYSE listed' },
+    'TTE':        { api:'TTE',   tv:'NYSE:TTE',    exchange:'NYSE',   note:'NYSE listed' },
+    'TOTALENERGIES':{ api:'TTE', tv:'NYSE:TTE',    exchange:'NYSE',   note:'NYSE listed' },
+
+    // ── Swiss companies ───────────────────────────────────────────────
+    'ROCHE':      { api:'RHHBY', tv:'NASDAQ:RHHBY',exchange:'OTC',    note:'OTC ADR' },
+    'NESTLE':     { api:'NSRGY', tv:'NASDAQ:NSRGY',exchange:'OTC',    note:'OTC ADR' },
+    'NSRGY':      { api:'NSRGY', tv:'NASDAQ:NSRGY',exchange:'OTC',    note:'OTC ADR' },
+    'UBS':        { api:'UBS',   tv:'NYSE:UBS',    exchange:'NYSE',   note:'NYSE listed' },
+    'ZURICH':     { api:'ZURVY', tv:'NASDAQ:ZURVY',exchange:'OTC',    note:'OTC ADR' },
+
+    // ── Chinese companies ─────────────────────────────────────────────
+    'TENCENT':    { api:'TCEHY', tv:'NASDAQ:TCEHY',exchange:'OTC',    note:'OTC ADR' },
+    'TCEHY':      { api:'TCEHY', tv:'NASDAQ:TCEHY',exchange:'OTC',    note:'OTC ADR' },
+    'JDCOM':      { api:'JD',    tv:'NASDAQ:JD',   exchange:'NASDAQ', note:'NASDAQ listed' },
+    'NETEASE':    { api:'NTES',  tv:'NASDAQ:NTES', exchange:'NASDAQ', note:'NASDAQ ADR' },
+    'NTES':       { api:'NTES',  tv:'NASDAQ:NTES', exchange:'NASDAQ', note:'NASDAQ ADR' },
+    'BYD':        { api:'BYDDF', tv:'NASDAQ:BYDDF',exchange:'OTC',    note:'OTC ADR' },
+    'BYDDF':      { api:'BYDDF', tv:'NASDAQ:BYDDF',exchange:'OTC',    note:'OTC ADR' },
+    'XPENG':      { api:'XPEV',  tv:'NYSE:XPEV',   exchange:'NYSE',   note:'NYSE listed' },
+    'XPEV':       { api:'XPEV',  tv:'NYSE:XPEV',   exchange:'NYSE',   note:'NYSE listed' },
+    'LIAUTO':     { api:'LI',    tv:'NASDAQ:LI',   exchange:'NASDAQ', note:'NASDAQ listed' },
+    'LI':         { api:'LI',    tv:'NASDAQ:LI',   exchange:'NASDAQ', note:'NASDAQ listed' },
+    'PINDUODUO':  { api:'PDD',   tv:'NASDAQ:PDD',  exchange:'NASDAQ', note:'NASDAQ listed' },
+    'PDD':        { api:'PDD',   tv:'NASDAQ:PDD',  exchange:'NASDAQ', note:'NASDAQ listed' },
+    'TEMU':       { api:'PDD',   tv:'NASDAQ:PDD',  exchange:'NASDAQ', note:'PDD/Temu' },
+    'ICBC':       { api:'IDCBY', tv:'NASDAQ:IDCBY',exchange:'OTC',    note:'OTC ADR' },
+    'CTRIP':      { api:'TCOM',  tv:'NASDAQ:TCOM', exchange:'NASDAQ', note:'Trip.com ADR' },
+    'TRIPCOM':    { api:'TCOM',  tv:'NASDAQ:TCOM', exchange:'NASDAQ', note:'Trip.com ADR' },
+
+    // ── South Korean companies ────────────────────────────────────────
+    'HYUNDAI':    { api:'HYMTF', tv:'NASDAQ:HYMTF',exchange:'OTC',    note:'OTC ADR' },
+    'KIA':        { api:'KIMTF', tv:'NASDAQ:KIMTF',exchange:'OTC',    note:'OTC ADR' },
+    'POSCO':      { api:'PKX',   tv:'NYSE:PKX',    exchange:'NYSE',   note:'NYSE ADR' },
+    'PKX':        { api:'PKX',   tv:'NYSE:PKX',    exchange:'NYSE',   note:'NYSE ADR' },
+    'SKHYNIX':    { api:'HXSCF', tv:'NASDAQ:HXSCF',exchange:'OTC',   note:'OTC ADR' },
+    'LGCHEM':     { api:'LGCLF', tv:'NASDAQ:LGCLF',exchange:'OTC',    note:'OTC ADR' },
+    'CELTRION':   { api:'CLTOF', tv:'NASDAQ:CLTOF',exchange:'OTC',    note:'OTC ADR' },
+
+    // ── Australian / Canadian / Brazilian ─────────────────────────────
+    'BHP':        { api:'BHP',   tv:'NYSE:BHP',    exchange:'NYSE',   note:'NYSE ADR' },
+    'RIOASX':     { api:'RIO',   tv:'NYSE:RIO',    exchange:'NYSE',   note:'NYSE ADR' },
+    'PETROBRAS':  { api:'PBR',   tv:'NYSE:PBR',    exchange:'NYSE',   note:'NYSE ADR' },
+    'PBR':        { api:'PBR',   tv:'NYSE:PBR',    exchange:'NYSE',   note:'NYSE ADR' },
+    'VALE':       { api:'VALE',  tv:'NYSE:VALE',   exchange:'NYSE',   note:'NYSE listed' },
+    'AMBEV':      { api:'ABEV',  tv:'NYSE:ABEV',   exchange:'NYSE',   note:'NYSE ADR' },
+    'ENBRIDGE':   { api:'ENB',   tv:'NYSE:ENB',    exchange:'NYSE',   note:'NYSE listed' },
+    'ENB':        { api:'ENB',   tv:'NYSE:ENB',    exchange:'NYSE',   note:'NYSE listed' },
+    'ROYALBANK':  { api:'RY',    tv:'NYSE:RY',     exchange:'NYSE',   note:'NYSE listed' },
+    'RY':         { api:'RY',    tv:'NYSE:RY',     exchange:'NYSE',   note:'NYSE listed' },
+    'TD':         { api:'TD',    tv:'NYSE:TD',     exchange:'NYSE',   note:'NYSE listed' },
+    'TDBK':       { api:'TD',    tv:'NYSE:TD',     exchange:'NYSE',   note:'NYSE listed' },
+    'CNR':        { api:'CNI',   tv:'NYSE:CNI',    exchange:'NYSE',   note:'NYSE listed' },
+    'CNI':        { api:'CNI',   tv:'NYSE:CNI',    exchange:'NYSE',   note:'NYSE listed' },
+    'MACQUARIE':  { api:'MQG',   tv:'NASDAQ:MQG',  exchange:'OTC',    note:'OTC ADR' },
+
+    // ── Indian ADRs (continued) ───────────────────────────────────────
+    'CIPLA':      { api:'CIPLA', tv:'NSE:CIPLA',   exchange:'NSE',    note:'NSE direct', nsFallback:'CIPLA.NS' },
+    'SUNPHARMA':  { api:'SUNPHARMA.NS', tv:'NSE:SUNPHARMA', exchange:'NSE', note:'NSE' },
+    'LTIMINDTREE':{ api:'LTIM.NS', tv:'NSE:LTIM',  exchange:'NSE',    note:'NSE' },
+    'LTIM':       { api:'LTIM.NS', tv:'NSE:LTIM',  exchange:'NSE',    note:'NSE' },
+    'COALINDIA':  { api:'COALINDIA.NS', tv:'NSE:COALINDIA', exchange:'NSE', note:'NSE' },
+    'HINDALCO':   { api:'HINDALCO.NS',  tv:'NSE:HINDALCO',  exchange:'NSE', note:'NSE' },
+    'VEDANTA':    { api:'VEDL.NS', tv:'NSE:VEDL',  exchange:'NSE',    note:'NSE' },
+    'VEDL':       { api:'VEDL.NS', tv:'NSE:VEDL',  exchange:'NSE',    note:'NSE' },
+  },
+
+  // ── NSE-only stocks (no US ADR — use .NS directly) ────────────────
+  _NSE_ONLY: new Set([
+    // ── Nifty 50 / Large Cap ─────────────────────────────────────────
+    'TCS','RELIANCE','HDFCBANK','ICICIBANK','INFY','BAJFINANCE','LT','SBIN',
+    'AXISBANK','KOTAKBANK','HINDUNILVR','TITAN','ASIANPAINT','MARUTI','ITC',
+    'ADANIENT','ADANIPORTS','ADANIGREEN','NTPC','POWERGRID','ONGC','COALINDIA',
+    'SUNPHARMA','CIPLA','DIVISLAB','DRREDDY','TATAMOTORS','TATASTEEL',
+    'TATAPOWER','TATACONSUM','BAJAJ-AUTO','BAJAJFINSV','HCLTECH','TECHM',
+    'WIPRO','LTIM','COFORGE','PERSISTENT','MPHASIS',
+    // ── Banking & Finance ─────────────────────────────────────────────
+    'PNB','BANKBARODA','CANARABANK','INDUSINDBK','YESBANK','FEDERALBNK',
+    'IDFCFIRSTB','RBLBANK','AUBANK','BANDHANBNK','UJJIVANSFB','EQUITASBNK',
+    'HDFCLIFE','SBILIFE','ICICIPRULI','ICICIGI','LICI','MUTHOOTFIN',
+    'BAJAJHFL','CHOLAFIN','SHRIRAMFIN','LICHSGFIN','MANAPPURAM',
+    'SUNDARMFIN','AAVAS','HOMEFIRST','APTUS','CANFINHOME',
+    // ── IT & Tech ─────────────────────────────────────────────────────
+    'INFY','WIPRO','HCLTECH','TECHM','LTIM','MPHASIS','COFORGE',
+    'PERSISTENT','KPITTECH','TATAELXSI','HAPPSTMNDS','MASTEK','NIIT',
+    'RATEGAIN','INTELLECT','NEWGEN','TANLA','INDIAMART','NAUKRI',
+    'JUSTDIAL','MATRIMONY','MAPMYINDIA','CARTRADE','EASEMYTRIP',
+    // ── Consumer & FMCG ──────────────────────────────────────────────
+    'NESTLEIND','BRITANNIA','DABUR','GODREJCP','COLPAL','MARICO',
+    'TATACONSUM','VBL','EMAMILTD','JYOTHYLAB','GILLETTE','PGHH',
+    'HONAUT','ZYDUSLIFE','MANKIND','PATANJALI','BIKAJI','DEVYANI',
+    'JUBLFOOD','WESTLIFE','SAPPHIRE','BARBEQUE','JTEKTINDIA',
+    // ── Pharma & Healthcare ───────────────────────────────────────────
+    'SUNPHARMA','CIPLA','DIVISLAB','DRREDDY','LUPIN','TORNTPHARM',
+    'AUROPHARMA','ALKEM','IPCA','GLENMARK','PFIZER','GLAXO','ABBOTINDIA',
+    'SANOFIINDIA','NATCOPHARM','GRANULES','GLAND','IOLCP','SOLARA',
+    'APOLLOHOSP','MAXHEALTH','FORTIS','NARAYANHRU','ASTER','RAINBOW',
+    'MEDPLUS','VIJAYA','METROPOLIS','THYROCARE','KRSNAA','SYNGENE',
+    // ── Auto & EV ─────────────────────────────────────────────────────
+    'MARUTI','TATAMOTORS','MM','BAJAJ-AUTO','HEROMOTOCO','EICHERMOT',
+    'TVSMOTOR','ASHOKLEY','BHARATFORG','BOSCHLTD','MOTHERSON','BALKRISIND',
+    'MRF','APOLLOTYRE','CEATLTD','JKTYRE','TIINDIA','SUPRAJIT',
+    'CRAFTSMAN','GREENPOWER','OLECTRA','GOLDENSAND',
+    // ── Energy & Power ────────────────────────────────────────────────
+    'ONGC','IOC','BPCL','HPCL','RELIANCE','TATAPOWER','POWERGRID',
+    'NTPC','ADANIGREEN','ADANITRANS','ATGL','TORNTPOWER','CESC',
+    'SJVN','NHPC','IREDA','RTNPOWER','SUZLON','INOXWIND',
+    'GREENPANEL','ORIENTELEC',
+    // ── Infrastructure & Capital Goods ────────────────────────────────
+    'LT','LTITECH','LTTS','BEL','HAL','BHEL','MAZAGON','COCHINSHIP',
+    'RVNL','IRFC','IRCTC','RAILTEL','IRSDC','RITES','IRCON',
+    'NBCC','NCC','HCC','PNCINFRA','AHLUWALIA','GPPL','KEC',
+    'KALPATPOWR','POWERINDIA','ABB','SIEMENS','CUMMINSIND',
+    'THERMAX','GRINDWELL','SCHAEFFLER','SKF','TIMKEN','ELGIEQUIP',
+    // ── Metals & Mining ──────────────────────────────────────────────
+    'TATASTEEL','JSWSTEEL','SAIL','HINDALCO','VEDL','NMDC','COALINDIA',
+    'MOIL','HINDZINC','NATIONALUM','RATNAMANI','WELSPUNIND','APL',
+    'JSWENERGY','GMRINFRA','ADANIPORTS',
+    // ── Cement ────────────────────────────────────────────────────────
+    'ULTRACEMCO','SHREECEM','ACC','AMBUJACEM','DALMIACEM','RAMCOCEM',
+    'JKCEMENT','HEIDELBERG','BIRLACEM','NCLTEX','ORIENTCEM',
+    // ── Chemicals & Specialty ─────────────────────────────────────────
+    'PIDILITIND','DEEPAKNTR','ALKYLAMINE','FINEORG','CLEAN','NEOGEN',
+    'AARTI','VINATI','GALAXYSURF','TATACHEM','GNFC','GSFC',
+    'BASF','SUDARSCHEM','PCBL','NAVNETEDUCATION',
+    // ── Real Estate ───────────────────────────────────────────────────
+    'DLF','LODHA','GODREJPROP','OBEROIRLTY','BRIGADE','PRESTIGE',
+    'SOBHA','KOLTEPATIL','PHOENIXLTD','NEXUSMALLS','MAHLIFE',
+    // ── Telecom ───────────────────────────────────────────────────────
+    'BHARTIARTL','IDEA','INDUSTOWER','TATACOMM','ROUTEMOBILE',
+    'TANLA','ONMOBILE',
+    // ── Media & Entertainment ─────────────────────────────────────────
+    'ZOMATO','PAYTM','NYKAA','DELHIVERY','SWIGGY','IXIGO',
+    'POLICYBZR','CARTRADE','EASEMYTRIP','HAPPSTMNDS',
+    'SUNTV','ZEEL','PVR','INOX','SAREGAMA','TIPS',
+    // ── New-Age & Startups ────────────────────────────────────────────
+    'NAUKRI','INDIAMART','JUSTDIAL','MAPMYINDIA','RATEGAIN',
+    'LATENTVIEW','XCHANGING','CYIENT','KPIGREEN',
+    // ── Retail & Consumption ─────────────────────────────────────────
+    'DMART','TRENT','TITAN','VMART','SHOPERSTOP','ABFRL','VEDANT',
+    'CAMPUS','BATA','RELAXO','METROBRAND','KPRMILL','TRIDENT',
+    // ── Exchange / Capital Markets ────────────────────────────────────
+    'BSE','CDSL','CAMS','NUVOCO','ANGELONE','5PAISA','IIFLWAM',
+    'MOTILALOFS','JMFINANCIAL','ISEC','GEOJITFSL',
+  ]),
+
+  resolveSymbol(rawTicker) {
+    if (!rawTicker) return null;
+    const t = rawTicker.toUpperCase().trim().replace(/\s+/g, '');
+
+    // ── 1. Already has a valid Finnhub suffix (.NS, .BO, .L) ──────────
+    if (t.endsWith('.NS')) {
+      const base = t.replace('.NS','');
+      return { apiSymbol: t, tradingviewSymbol: `NSE:${base}`, displaySymbol: base, exchange: 'NSE', provider: 'Finnhub', note: 'NSE' };
+    }
+    if (t.endsWith('.BO')) {
+      const base = t.replace('.BO','');
+      return { apiSymbol: t, tradingviewSymbol: `BSE:${base}`, displaySymbol: base, exchange: 'BSE', provider: 'Finnhub', note: 'BSE' };
+    }
+    if (t.endsWith('.L')) {
+      const base = t.replace('.L','');
+      return { apiSymbol: t, tradingviewSymbol: `LSE:${base}`, displaySymbol: base, exchange: 'LSE', provider: 'Finnhub', note: 'LSE' };
+    }
+    // Strip TradingView-only prefixes (never send these to Finnhub)
+    const stripped = t.includes(':') ? t.split(':').pop() : t;
+
+    // ── 2. Has a reliable US ADR / US listing ─────────────────────────
+    if (this._ADR_MAP[stripped]) {
+      return { ...this._ADR_MAP[stripped], displaySymbol: stripped, provider: 'Finnhub' };
+    }
+
+    // ── 3. Pure NSE stock — use .NS suffix ────────────────────────────
+    if (this._NSE_ONLY.has(stripped)) {
+      return { apiSymbol: `${stripped}.NS`, tradingviewSymbol: `NSE:${stripped}`, displaySymbol: stripped, exchange: 'NSE', provider: 'Finnhub', note: 'NSE' };
+    }
+
+    // ── 4. Default: treat as US stock ─────────────────────────────────
+    // TradingView: prefer NASDAQ for 4-5 letter, NYSE for 1-3 letter
+    const tvExchange = stripped.length <= 3 ? 'NYSE' : 'NASDAQ';
+    return { apiSymbol: stripped, tradingviewSymbol: `${tvExchange}:${stripped}`, displaySymbol: stripped, exchange: 'US', provider: 'Finnhub', note: null };
+  },
+
+
+
+  // ── INTENT CLASSIFICATION ENGINE v2 (QA-validated, 23 test cases) ──
+  // Validated logic: region words (US/UK/India) are excluded from ticker
+  // detection before deciding scanner vs single-stock mode.
+  classifyIntent(msg) {
+    const m = msg.toLowerCase().trim();
+
+    // Use the authoritative MARKET_REGION_TERMS set (not a local copy)
+    // This ensures all nationality adjectives and country names are covered
+    const REGION_WORDS = this.MARKET_REGION_TERMS;
+
+    // Extract real tickers (uppercase 2-5 chars that aren't region/finance terms)
+    const rawTokens  = (msg.match(/\b[A-Z]{2,12}\b/g) || []);
+    const realTickers = rawTokens.filter(t => !REGION_WORDS.has(t) && !this.RESERVED_FINANCE_TERMS.has(t));
+    const hasRealTicker = realTickers.length > 0;
+
+    // ── SCANNER: asking for a list, with no real specific ticker ──────
+    const isListRequest = /\b(find|show me|list|what are|give me|scan|screen|recommend|suggest|best|top)\b/i.test(msg) &&
+                          /\b(stocks?|equities|picks?|opportunities|setups?|movers?|companies|sectors?)\b/i.test(msg) &&
+                          !hasRealTicker;
+    const isMarketWide  = /\b(swing trading stocks?|swing.?trade stocks?|momentum stocks?|oversold stocks?|breakout stocks?|top stocks?|long.?term stocks?|value stocks?|dividend stocks?|growth stocks?)\b/i.test(msg) &&
+                          !hasRealTicker;
+    const isExplicitScan = /\b(run.*scan|market scan|ai scan|scan.*market)\b/i.test(msg);
+    // Portfolio BUILD requests (suggest stocks for a new portfolio)
+    const isBuildPort = /\b(build|create|construct|make|design)\b/i.test(msg) &&
+                        /\b(portfolio|watchlist)\b/i.test(msg) &&
+                        !/\bmy\b/i.test(msg);
+
+    if (isListRequest || isMarketWide || isExplicitScan || isBuildPort) {
+      let region = 'US';
+      if (/\b(india|indian|nse|bse|sensex|nifty)\b/i.test(msg)) region = 'IN';
+      if (/\b(uk|ftse|british)\b/i.test(msg)) region = 'UK';
+      return { mode: 'SCANNER', region };
+    }
+
+    // ── PORTFOLIO: questions about the user's own holdings ────────────
+    if (/\b(my portfolio|portfolio analysis|analyse.* portfolio|portfolio.*review|rebalance|my holdings|my positions)\b/i.test(msg)) {
+      return { mode: 'PORTFOLIO' };
+    }
+
+    // ── COMPARE: explicit comparison with real tickers ────────────────
+    if (/\b(compare|vs\.?|versus)\b/i.test(msg) && hasRealTicker) {
+      return { mode: 'COMPARE' };
+    }
+
+    // ── SWING: entry/exit/swing keywords on a specific real ticker ────
+    if (hasRealTicker && (
+      /\b(swing.*setup|setup.*swing|swing.*trade|swing.*entry|aapl.*swing|entry.*point|stop.?loss.*target)\b/i.test(msg) ||
+      /\b(entry|exit|stop.?loss|profit.*target)\b.*\b[A-Z]{2,5}\b/.test(msg)
+    )) {
+      return { mode: 'SWING' };
+    }
+
+    // ── DEFAULT: single stock analysis ───────────────────────────────
+    return { mode: 'SINGLE_STOCK' };
+  },
+
+  // ── EXTRACT TICKERS WITH SEMANTIC FILTERING ───────────────────────
+  extractTickers(msg, nameMap) {
+    // 1. Get explicit uppercase tokens
+    const rawTokens = (msg.match(/\b[A-Z]{2,12}(?:\.NS|\.BO|\.L)?\b/g) || []);
+    const explicitTickers = [...new Set(rawTokens.filter(t => {
+      // Must not be a reserved finance term
+      if (this.RESERVED_FINANCE_TERMS.has(t)) return false;
+      // Must not be a market region word
+      if (this.MARKET_REGION_TERMS.has(t)) return false;
+      // Must be at least 2 chars
+      if (t.length < 2) return false;
+      return true;
+    }))];
+
+    // 2. Company name matching (longest match first)
+    const msgLower = msg.toLowerCase();
+    const nameTickers = Object.entries(nameMap)
+      .sort(([a],[b]) => b.length - a.length)
+      .filter(([name]) => msgLower.includes(name))
+      .map(([,ticker]) => ticker)
+      .filter(t => t && t !== 'NULL');
+
+    // 3. Combine, deduplicate, limit
+    return [...new Set([...explicitTickers, ...nameTickers])];
+  },
+
+  // ── SWING TRADING PROMPT BUILDER ──────────────────────────────────
+  buildSwingPrompt(symbol, quote, technicals, risk) {
+    const f = (v, s='') => v != null ? `${Number(v).toFixed(2)}${s}` : 'N/A';
+    return `You are StockMind AI — institutional swing trading analyst. Analyse ${symbol} for a 5-20 day swing trade setup. Use ONLY the verified live data below.
+
+LIVE DATA:
+Price: $${f(quote.c)} | Day: ${quote.dp >= 0?'+':''}${f(quote.dp,'%')} | High: $${f(quote.h)} | Low: $${f(quote.l)} | Prev: $${f(quote.pc)}
+${technicals.rsiNote || ''} | ${technicals.macdNote || ''} | ${technicals.maNote || ''}
+Risk: ${risk.level} | ${risk.factors.slice(0,2).join(' | ') || 'No elevated risk'}
+
+RESPOND IN THIS EXACT FORMAT:
+
+⚡ SWING SETUP
+[Is this a valid swing setup? What pattern/signal is visible?]
+
+🎯 ENTRY ZONE
+[Specific price range to enter — based on current price and support]
+
+🛑 STOP LOSS
+[Stop loss level with reasoning — max 1-2 sentences]
+
+💰 PROFIT TARGETS
+T1: [first target price] | T2: [second target price] | R/R: [ratio]
+
+📊 MOMENTUM STRENGTH
+[RSI context, MACD signal, volume trend if available]
+
+⚠ RISK FACTORS
+[Top 1-2 risks for this swing trade]
+
+🎯 SWING VERDICT
+[ENTER / WAIT / AVOID — with one clear reason]
+
+⚠ Swing trade setup only — not investment advice. Max 200 words.`;
+  },
+
+  // ── INSTITUTIONAL COMPARISON PROMPT BUILDER ───────────────────────
+  buildComparePromptV2(stocks) {
+    // stocks: [{symbol, quote, profile, metrics, technicals, risk}]
+    const f = (v, s='') => v != null && v !== 0 ? `${Number(v).toFixed(2)}${s}` : 'N/A';
+    
+    let dataBlock = stocks.map(s => {
+      const q = s.quote;
+      const m = s.metrics;
+      const t = s.technicals;
+      return `${s.symbol} (${s.profile?.name || s.symbol}):
+  Price: $${f(q.c)} | Day: ${q.dp >= 0?'+':''}${f(q.dp,'%')} | Risk: ${s.risk.level}
+  P/E: ${f(m?.peTTM)}x | EPS: $${f(m?.epsTTM)} | RevGrowth: ${f(m?.revenueGrowthTTMYoy,'%')} | ROE: ${f(m?.roeTTM,'%')}
+  ${t.rsiNote || 'RSI: N/A'} | ${t.macdNote || 'MACD: N/A'}`;
+    }).join('\n\n');
+
+    const symbols = stocks.map(s => s.symbol);
+    return `You are StockMind AI — institutional equity research analyst. Compare ${symbols.join(' vs ')} using ONLY the verified live data below. Write like an institutional research note, not two separate analyses.
+
+VERIFIED LIVE DATA:
+${dataBlock}
+
+RESPOND IN THIS EXACT FORMAT:
+
+📊 BUSINESS POSITIONING
+[How these companies differ in their competitive moats and market positions — NOT separate paragraphs, comparative reasoning]
+
+📈 GROWTH COMPARISON
+[Side-by-side revenue growth, earnings growth context — cite specific numbers]
+
+💰 VALUATION COMPARISON
+[P/E, EPS comparison — which trades at a premium and is it justified?]
+
+⚡ TECHNICAL COMPARISON
+[Relative momentum and RSI positioning across all stocks]
+
+🔴 RISK COMPARISON
+[Risk level across the stocks — which carries more risk and why]
+
+🎯 INVESTOR FIT
+[Which stock suits which investor profile — long-term vs momentum vs value]
+
+🏆 RELATIVE VERDICT
+[Clear winner for today's data with specific reasoning — state one as strongest setup]
+
+⚠ Live data analysis only. Not financial advice. Max 280 words.`;
+  },
+
+  // ── PORTFOLIO MEMORY ENGINE v2 ─────────────────────────────────────
+  portfolioMemory: {
+    holdings: [],           // [{symbol, qty, avg, currency, livePrice, pnl}]
+    sectors: {},            // {sector: percentage}
+    investorProfile: null,  // saved investor mode
+    riskTolerance: null,
+    strategy: null,
+    geography: [],
+    lastUpdated: 0,
+
+    update(portfolio, quotes) {
+      this.holdings = portfolio.map(pos => {
+        const q = quotes.find(r => r.symbol === pos.symbol);
+        const livePrice = q?.quote?.c || null;
+        const pnl = livePrice ? ((livePrice - pos.avg) / pos.avg * 100) : null;
+        return { ...pos, livePrice, pnl };
+      });
+      this.lastUpdated = Date.now();
+    },
+
+    getSummary() {
+      if (!this.holdings.length) return null;
+      const total = this.holdings.reduce((s, h) => s + (h.livePrice || h.avg) * h.qty, 0);
+      const gainers = this.holdings.filter(h => h.pnl > 0).length;
+      const losers  = this.holdings.filter(h => h.pnl < 0).length;
+      return { total, gainers, losers, count: this.holdings.length };
+    },
+
+    buildContext() {
+      if (!this.holdings.length) return null;
+      const lines = this.holdings.map(h =>
+        `${h.symbol}: ${h.qty} shares @ $${h.avg.toFixed(2)} avg${h.livePrice ? ` (live: $${h.livePrice.toFixed(2)}, P&L: ${h.pnl >= 0 ? '+' : ''}${h.pnl?.toFixed(2)}%)` : ''}`
+      );
+      return lines.join('\n');
+    },
+  },
+
+
+  // ── NAME MAP ACCESSOR (exposes built-in company→ticker map) ──────
+  // Returns a snapshot of the NAME_MAP used in sendChat for reuse
+  // in extractTickers(). Add new entries here to extend globally.
+  _getNameMap() {
+    // Return the same NAME_MAP defined in sendChat (shared reference)
+    // We use a window-level cache so we parse it only once
+    if (!window._SM_NAME_MAP_CACHE) {
+      // Trigger sendChat to build it by reading it from the closure —
+      // instead we define a duplicate minimal map here for the intent engine
+      // The full map is still used in sendChat for legacy path
+      window._SM_NAME_MAP_CACHE = {
+        apple:'AAPL', microsoft:'MSFT', google:'GOOGL', alphabet:'GOOGL',
+        nvidia:'NVDA', tesla:'TSLA', meta:'META', amazon:'AMZN', amd:'AMD',
+        netflix:'NFLX', intel:'INTC', qualcomm:'QCOM', broadcom:'AVGO',
+        paypal:'PYPL', visa:'V', mastercard:'MA', shopify:'SHOP',
+        disney:'DIS', spotify:'SPOT', salesforce:'CRM', oracle:'ORCL',
+        jpmorgan:'JPM', goldman:'GS', berkshire:'BRK.B', blackrock:'BLK',
+        ford:'F', gm:'GM', rivian:'RIVN', boeing:'BA', lockheed:'LMT',
+        exxon:'XOM', chevron:'CVX', shell:'SHEL', bp:'BP',
+        pfizer:'PFE', moderna:'MRNA', unitedhealth:'UNH', lilly:'LLY',
+        // Indian
+        reliance:'RELIANCE.NS', tcs:'TCS.NS', infosys:'INFY.NS', wipro:'WIPRO.NS',
+        'hdfc bank':'HDFCBANK.NS', 'icici bank':'ICICIBANK.NS', sbi:'SBIN.NS',
+        'bajaj finance':'BAJFINANCE.NS', titan:'TITAN.NS', zomato:'ZOMATO.NS',
+      };
+    }
+    return window._SM_NAME_MAP_CACHE;
+  },
+
   // ── AI CHAT ───────────────────────────────────────────────────────────────
   async sendChat() {
+    if (this._chatBusy) return;  // Prevent duplicate requests
     const input = document.getElementById('cin');
     const msg   = input.value.trim();
     if (!msg) return;
+    this._chatBusy = true;
+    const sBtn = document.getElementById('sBtn');
+    if (sBtn) { sBtn.disabled = true; sBtn.textContent = '…'; }
 
     const msgs = document.getElementById('chatMsgs');
 
     // Add user message
     const userDiv = document.createElement('div');
     userDiv.className = 'msg user';
-    userDiv.innerHTML = `<div class="msg-label">You</div><div class="bubble user">${msg}</div>`;
+    // Sanitize: escape HTML special chars to prevent XSS
+    const safeMsgHtml = msg.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    userDiv.innerHTML = `<div class="msg-label">You</div><div class="bubble user">${safeMsgHtml}</div>`;
     msgs.appendChild(userDiv);
     input.value = '';
     msgs.scrollTop = msgs.scrollHeight;
@@ -3077,54 +3887,127 @@ Max 250 words. Only reference the positions and data listed above.`;
     };
 
     try {
-      // ── STEP 1: Resolve ticker + MEMORY FOLLOW-UP DETECTION ──────────────
-      // Check for Finnhub key first
+      // ── STEP 1: SEMANTIC INTENT CLASSIFICATION + ENTITY EXTRACTION ──────
       if (!APP.finnhubKey) {
         thinkDiv.querySelector('.bubble').innerHTML =
           `<strong>⚠️ Finnhub key not found.</strong><br>Please sign out and sign back in to re-enter your API keys.`;
         return;
       }
 
+      // Classify intent before any ticker extraction
+      const intent = this.classifyIntent(msg);
+
+      // ── SCANNER mode: never extract tickers ──────────────────────────────
+      if (intent.mode === 'SCANNER') {
+        setThinkText(`Running ${intent.region} market scanner…`);
+        thinkDiv.remove();
+        // Route to scanner panel with context
+        this.switchTab('scanner');
+        const scanNote = document.createElement('div');
+        scanNote.className = 'msg ai';
+        scanNote.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">
+          <div class="ai-section sec-summary"><div class="ai-sec-label">📊 SCANNER REQUEST DETECTED</div>
+          <div class="ai-sec-body">I've routed you to the <strong>AI Scanner</strong> — click <strong>"Run AI Scan"</strong> to get live signal detection across ${intent.region === 'IN' ? 'Indian NSE' : 'US'} stocks.<br><br>
+          The scanner identifies: Bullish Setups · Bearish Signals · Momentum Leaders · Oversold Opportunities · High Volatility · AI Picks.</div></div>
+        </div>`;
+        document.getElementById('chatMsgs').appendChild(scanNote);
+        document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+        return;
+      }
+
+      // ── COMPARE mode: fetch both stocks and use institutional compare ──────
+      if (intent.mode === 'COMPARE') {
+        const cmpTickers = this.extractTickers(msg, this._getNameMap()).slice(0, 3);
+        if (cmpTickers.length < 2) {
+          // Not enough tickers — route to compare tab with helpful note
+          this.switchTab('cmp');
+          thinkDiv.remove();
+          const noteDiv = document.createElement('div');
+          noteDiv.className = 'msg ai';
+          noteDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">
+            <div class="ai-section sec-summary"><div class="ai-sec-label">📊 COMPARE MODE</div>
+            <div class="ai-sec-body">I've opened the <strong>Compare tab</strong>. Enter 2–3 tickers to compare side-by-side with institutional analysis.</div></div>
+          </div>`;
+          document.getElementById('chatMsgs').appendChild(noteDiv);
+          document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+          return;
+        }
+        setThinkText(`Fetching live data for ${cmpTickers.join(' vs ')}…`);
+        try {
+          const resolvedSyms = cmpTickers.map(t => this.resolveSymbol(t));
+          const apiSyms      = resolvedSyms.map(r => r?.apiSymbol || r);
+          const quotes       = await ApiClient.batchQuotes(apiSyms);
+          const stocksData   = resolvedSyms.map((resolved, i) => {
+            const q = quotes.find(r => r.symbol === apiSyms[i]);
+            const tech = this.computeTechnicals(null, q?.quote);
+            const risk = this.calculateRisk(null, q?.quote, tech);
+            return { symbol: resolved?.displaySymbol || apiSyms[i], quote: q?.quote || {}, profile: null, metrics: null, technicals: tech, risk };
+          });
+          const cmpPrompt = this.buildComparePromptV2(stocksData);
+          setThinkText('Running institutional comparison…');
+          const result = await this.callGroqAI(cmpPrompt);
+          if (thinkDiv.isConnected) thinkDiv.remove();
+          const aiDiv = document.createElement('div');
+          aiDiv.className = 'msg ai';
+          aiDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">${this.formatAIResponse(result)}<div style="margin-top:8px;font-size:9px;color:var(--tx3)">⚠ Live price comparison only · Not financial advice</div></div>`;
+          document.getElementById('chatMsgs').appendChild(aiDiv);
+          document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+          this.saveToHistory(`Compare: ${cmpTickers.join(' vs ')}`, result, null);
+        } catch(e) {
+          if (thinkDiv.isConnected) thinkDiv.remove();
+          const errDiv = document.createElement('div');
+          errDiv.className = 'msg ai';
+          errDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><div class="ai-section sec-risk"><div class="ai-sec-label">⚠️ COMPARE ERROR</div><div class="ai-sec-body">Could not fetch comparison data. Please try the Compare tab directly.</div></div></div>`;
+          document.getElementById('chatMsgs').appendChild(errDiv);
+        }
+        return;
+      }
+
+      // ── PORTFOLIO mode: use portfolio memory, never random stocks ────────
+      if (intent.mode === 'PORTFOLIO') {
+        setThinkText('Analysing your portfolio…');
+        if (!this.state.portfolio.length) {
+          thinkDiv.querySelector('.bubble').innerHTML =
+            `<strong>📭 Portfolio is empty</strong><br>Add positions in the <a href="#" onclick="APP.switchTab('portfolio');return false" style="color:var(--ac)">Portfolio tab</a> first, then ask me to analyse it.`;
+          return;
+        }
+        // Use portfolio data directly — no random stock injection
+        const results = await ApiClient.batchQuotes(this.state.portfolio.map(p => p.symbol));
+        this.portfolioMemory.update(this.state.portfolio, results);
+        const portCtx = this.portfolioMemory.buildContext();
+        const portPrompt = `You are StockMind AI — institutional portfolio analyst. Analyse this portfolio using ONLY the verified live data below.
+
+PORTFOLIO HOLDINGS (Live prices from Finnhub via backend):
+${portCtx}
+
+USER QUESTION: "${msg}"
+
+RESPOND WITH:
+📊 PORTFOLIO OVERVIEW: [Total value, P&L summary, number of positions]
+📈 TOP PERFORMERS: [Best performing positions with P&L data]
+🔴 RISK POSITIONS: [Underperforming or high-risk positions]
+⚖ CONCENTRATION: [Any sector/position concentration risks visible in this data]
+🎯 VERDICT: [Direct answer to the user's question, specific to their holdings]
+
+⚠ Based on live prices only. Not financial advice. Max 250 words.`;
+        const result = await this.callGroqAI(portPrompt);
+        if (thinkDiv.isConnected) thinkDiv.remove();
+        const aiDiv = document.createElement('div');
+        aiDiv.className = 'msg ai';
+        aiDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">${this.formatAIResponse(result)}<div style="margin-top:8px;font-size:9px;color:var(--tx3)">⚠ Portfolio analysis based on your ${this.state.portfolio.length} positions · Not financial advice</div></div>`;
+        document.getElementById('chatMsgs').appendChild(aiDiv);
+        document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+        return;
+      }
+
       // ── MEMORY: detect follow-up questions ────────────────────────────────
-      // If this looks like a follow-up (pronouns, no new ticker) and we have
-      // an active entity from earlier in the session, inject that context.
       const isFollowUp = this.memory.activeTicker && this.memory.isFollowUp(msg);
       if (isFollowUp) {
         setThinkText(`Continuing analysis of ${this.memory.activeEntity}…`);
       }
 
-      const IGNORE = new Set([
-        // Common words
-        'AI','THE','FOR','AND','BUY','NOT','GET','CAN',
-        'USD','DAY','NOW','HOW','WHY','WHO','ARE','HAS','ITS','ALL','TOP',
-        'NEW','OLD','USE','ANY','ONE','TWO','MY','ME','IS','IT','IN','UP',
-        'DO','AT','BE','ANALYSE','ANALYZE','TELL','SHOW','WHAT','GIVE',
-        'STOCK','PRICE','DATA','INFO','ABOUT','TODAY','CURRENT','LATEST',
-        // ── RESERVED FINANCIAL TERMS (Section 15) ─────────────────────
-        // Technical indicators
-        'RSI','MACD','EMA','SMA','VWAP','ATR','ADX','CCI','OBV','SAR',
-        'BB','BOLL','STOCH','DMI','AROON','MFI','ROC','TRIX',
-        // Fundamental metrics
-        'PEG','EPS','ROE','ROA','ROIC','ROI','DCF','FCF','EBITDA',
-        'PE','PB','PS','PD','EV','NI','TTM','YOY','QOQ','MOM',
-        'NAV','NTA','BPS','DPS','NFO','AUM','XIRR','CAGR',
-        // Market terms
-        'ETF','IPO','FPO','OFS','NFO','SIP','MF','PMS','AIF',
-        'GDP','CPI','WPI','PMI','IIP','REPO','SLR','CRR','PLR','MCLR',
-        'FDI','FII','DII','FPI','QIB','HNI','RII',
-        // Chart patterns
-        'OHLCV','OHLC','HLC','HLCC','HL','LH',
-        // General finance
-        'BULL','BEAR','LONG','SHORT','CALL','PUT','SWAP','BOND',
-        'NIFTY','SENSEX','BSE','NSE','MCX','SEBI','RBI','IRDAI',
-        'NYSE','NASDAQ','AMEX','LSE','TSX','ASX','SGX','HKX',
-        'YTD','MTD','QTD','FYTD','52W','52WH','52WL',
-      ]);
-
-      // Extract explicit uppercase tickers (e.g. AAPL, MSFT)
-      const explicitTickers = [...new Set(
-        (msg.match(/\b[A-Z]{2,5}\b/g) || []).filter(t => !IGNORE.has(t))
-      )];
+      // ── Extract tickers using semantic filtering ─────────────────────────
+      const explicitTickers = this.extractTickers(msg, this._getNameMap());
 
       // Built-in company name → ticker map (500+ companies, instant resolution)
       const NAME_MAP = {
@@ -3137,12 +4020,12 @@ Max 250 words. Only reference the positions and data listed above.`;
         snap:'SNAP', snapchat:'SNAP', twitter:'TWTR', x:'TWTR',
         pinterest:'PINS', reddit:'RDDT', discord:'MSFT',
         linkedin:'MSFT', whatsapp:'META', instagram:'META', youtube:'GOOGL',
-        tiktok:'BDNCE', twitch:'AMZN', telegram:'NULL', signal:'NULL',
+        tiktok:'BDNCE', twitch:'AMZN', telegram:'', signal:'',
 
         // ── Payments / Fintech ────────────────────────────────────────────
         paypal:'PYPL', visa:'V', mastercard:'MA', square:'SQ', block:'SQ',
         robinhood:'HOOD', coinbase:'COIN', sofi:'SOFI', affirm:'AFRM',
-        stripe:'STRP', klarna:'KLAR', chime:'CHIM', revolut:'NULL',
+        stripe:'STRP', klarna:'KLAR', chime:'CHIM', revolut:'',
         'american express':'AXP', amex:'AXP', discover:'DFS',
         'western union':'WU', moneygram:'MGI', nubank:'NU',
 
@@ -3151,7 +4034,7 @@ Max 250 words. Only reference the positions and data listed above.`;
         'jd.com':'JD', jd:'JD', pinduoduo:'PDD', temu:'PDD',
         mercadolibre:'MELI', wayfair:'W', walmart:'WMT', target:'TGT',
         costco:'COST', kroger:'KR', cvs:'CVS', walgreens:'WBA',
-        'best buy':'BBY', ikea:'NULL', zara:'ITX', 'h&m':'HM',
+        'best buy':'BBY', ikea:'', zara:'ITX', 'h&m':'HM',
 
         // ── Entertainment / Media ─────────────────────────────────────────
         disney:'DIS', spotify:'SPOT', warner:'WBD',
@@ -3166,7 +4049,7 @@ Max 250 words. Only reference the positions and data listed above.`;
         workday:'WDAY', snowflake:'SNOW', datadog:'DDOG', twilio:'TWLO',
         cloudflare:'NET', mongodb:'MDB', palantir:'PLTR', splunk:'SPLK',
         hubspot:'HUBS', okta:'OKTA', veeva:'VEEV', zendesk:'ZEN',
-        freshworks:'FRSH', asana:'ASAN', monday:'MNDY', notion:'NULL',
+        freshworks:'FRSH', asana:'ASAN', monday:'MNDY', notion:'',
         atlassian:'TEAM', jira:'TEAM', confluence:'TEAM', slack:'CRM',
         zoom:'ZM', docusign:'DOCU', dropbox:'DBX', box:'BOX',
 
@@ -3191,17 +4074,17 @@ Max 250 words. Only reference the positions and data listed above.`;
         goldman:'GS', 'goldman sachs':'GS', 'wells fargo':'WFC',
         'morgan stanley':'MS', citi:'C', citibank:'C', citigroup:'C',
         blackrock:'BLK', berkshire:'BRK.B', 'charles schwab':'SCHW',
-        fidelity:'NULL', vanguard:'NULL', 'state street':'STT',
+        fidelity:'', vanguard:'', 'state street':'STT',
         'bank of new york':'BK', pnc:'PNC', 'us bank':'USB',
         'truist':'TFC', 'capital one':'COF', synchrony:'SYF',
 
         // ── Airlines / Travel ─────────────────────────────────────────────
         delta:'DAL', united:'UAL', american:'AAL', southwest:'LUV',
         ryanair:'RYAAY', easyjet:'ESYJY', 'british airways':'IAG',
-        lufthansa:'DLAKY', 'air france':'AFLYY', emirates:'NULL',
+        lufthansa:'DLAKY', 'air france':'AFLYY', emirates:'',
         airbnb:'ABNB', booking:'BKNG', expedia:'EXPE', tripadvisor:'TRIP',
         lyft:'LYFT', uber:'UBER', doordash:'DASH', instacart:'CART',
-        grubhub:'NULL', 'door dash':'DASH',
+        grubhub:'', 'door dash':'DASH',
 
         // ── Healthcare / Pharma ───────────────────────────────────────────
         johnson:'JNJ', 'johnson and johnson':'JNJ', pfizer:'PFE',
@@ -3247,7 +4130,7 @@ Max 250 words. Only reference the positions and data listed above.`;
         boeing:'BA', lockheed:'LMT', 'lockheed martin':'LMT',
         raytheon:'RTX', northrop:'NOC', 'general dynamics':'GD',
         'l3harris':'LHX', 'textron':'TXT', 'heico':'HEI',
-        'transdigm':'TDG', spacex:'SPCE', 'virgin galactic':'SPCE',
+        'transdigm':'TDG', spacex:''  // SpaceX is private — no ticker, 'virgin galactic':'VIRG',  // check current ticker
 
         // ── Real Estate / REITs ───────────────────────────────────────────
         realty:'O', 'american tower':'AMT', prologis:'PLD',
@@ -3259,7 +4142,7 @@ Max 250 words. Only reference the positions and data listed above.`;
         // ── Crypto-adjacent ───────────────────────────────────────────────
         microstrategy:'MSTR', 'marathon digital':'MARA',
         'riot platforms':'RIOT', 'riot blockchain':'RIOT',
-        'galaxy digital':'GLXY', 'grayscale':'NULL',
+        'galaxy digital':'GLXY', 'grayscale':'',
 
         // ── Indian Stocks — Banking ───────────────────────────────────────
         'hdfc bank':'HDFCBANK.NS','hdfcbank':'HDFCBANK.NS',
@@ -3370,15 +4253,236 @@ Max 250 words. Only reference the positions and data listed above.`;
         'spy':'SPY','qqq':'QQQ','voo':'VOO','vti':'VTI',
         'iwm':'IWM','dia':'DIA','xlk':'XLK','xle':'XLE',
         'ark invest':'ARKK','arkk':'ARKK','arkg':'ARKG',
+        'gld':'GLD','slv':'SLV','tlt':'TLT','hyg':'HYG',
+        'vxus':'VXUS','vea':'VEA','vwo':'VWO','eem':'EEM',
+        'xlf':'XLF','xlv':'XLV','xlb':'XLB','xli':'XLI',
+        'xly':'XLY','xlp':'XLP','xlre':'XLRE','xlu':'XLU',
+        'soxl':'SOXL','tqqq':'TQQQ','sqqq':'SQQQ','spxl':'SPXL',
+        'gold etf':'GLD','bitcoin etf':'IBIT','bitcoin':'IBIT',
+
+        // ── US Mega Cap (additions) ───────────────────────────────────
+        'arm':'ARM','arm holdings':'ARM',
+        'crowdstrike':'CRWD','crowd strike':'CRWD',
+        'palo alto':'PANW','palo alto networks':'PANW',
+        'fortinet':'FTNT','zscaler':'ZS','sentinelone':'S',
+        'rapid7':'RPD','qualys':'QLYS','tenable':'TENB',
+        'cloudflare':'NET',
+        'datadog':'DDOG','dynatrace':'DT','new relic':'NEWR',
+        'elastic':'ESTC','splunk':'SPLK',
+        'mongodb':'MDB','couchbase':'BASE','cockroachdb':'',
+        'snowflake':'SNOW','databricks':'','dbt':'',
+        'confluent':'CFLT','mulesoft':'CRM',
+        'hashicorp':'HCP','terraform':'HCP',
+        'gitlab':'GTLB','github':'MSFT',
+        'servicenow':'NOW','workday':'WDAY',
+        'veeva':'VEEV','epic systems':'',
+        'sap':'SAP','oracle':'ORCL',
+        'toast':'TOST','lightspeed':'LSPD',
+        'squarespace':'SQSP','wix':'WIX','godaddy':'GDDY',
+
+        // ── Fintech ────────────────────────────────────────────────────
+        'stripe':'','brex':'','plaid':'','chime':'',
+        'nu bank':'NU','nubank':'NU',
+        'upstart':'UPST','affirm':'AFRM','klarna':'',
+        'green dot':'GDOT','netspend':'',
+        'wise':'','transferwise':'','revolut':'',
+
+        // ── US Consumer / Retail ──────────────────────────────────────
+        'dollar general':'DG','dollar tree':'DLTR',
+        'five below':'FIVE','burlington':'BURL',
+        'ross stores':'ROST','ross':'ROST',
+        'tjx':'TJX','tj maxx':'TJX','marshalls':'TJX',
+        'gap':'GPS','old navy':'GPS','banana republic':'GPS',
+        'urban outfitters':'URBN','anthropologie':'URBN',
+        'abercrombie':'ANF','american eagle':'AEO',
+        'bath body works':'BBWI','victoria secret':'VSCO',
+        'tapestry':'TPR','coach':'TPR','kate spade':'TPR',
+        'capri holdings':'CPRI','versace':'CPRI','michael kors':'CPRI',
+        'pvh':'PVH','calvin klein':'PVH','tommy hilfiger':'PVH',
+        'hanesbrands':'HBI','carter':'CRI',
+        'estee lauder':'EL','ulta beauty':'ULTA','ulta':'ULTA',
+        'procter gamble':'PG','procter & gamble':'PG','p&g':'PG',
+        'colgate palmolive':'CL','church dwight':'CHD',
+        'clorox':'CLX','spectrum brands':'SPB',
+
+        // ── US Industrials / Machinery ────────────────────────────────
+        'caterpillar':'CAT','deere':'DE','john deere':'DE',
+        'cummins':'CMI','parker hannifin':'PH','parker':'PH',
+        'honeywell':'HON','emerson':'EMR','eaton':'ETN',
+        'illinois tool':'ITW','itw':'ITW',
+        'dover':'DOV','roper':'ROP','danaher':'DHR',
+        'pentair':'PNR','watts water':'WTS','xylem':'XYL',
+        'graco':'GGG','nordson':'NDSN','watts':'WTS',
+        'trane':'TT','carrier':'CARR','lennox':'LII','york':'JCI',
+        'johnson controls':'JCI',
+        '3m':'MMM','mmm':'MMM',
+        'ge':'GE','general electric':'GE',
+        'ge aerospace':'GE','ge healthcare':'GEHC',
+        'ge vernova':'GEV',
+
+        // ── US Utilities / Energy ─────────────────────────────────────
+        'nextera':'NEE','nextera energy':'NEE',
+        'duke energy':'DUK','southern company':'SO',
+        'dominion':'D','dominion energy':'D',
+        'consolidated edison':'ED','con ed':'ED',
+        'pg&e':'PCG','pge':'PCG',
+        'american electric':'AEP','aep':'AEP',
+        'firstenergy':'FE','entergy':'ETR',
+        'exelon':'EXC','ppl corporation':'PPL',
+        'sempra':'SRE','ameren':'AEE',
+        'eversource':'ES','avangrid':'AGR',
+        'clean energy fuels':'CLNE','bloom energy':'BE',
+        'plug power':'PLUG','fuel cell energy':'FCEL',
+        'sunrun':'RUN','sunpower':'SPWR','enphase':'ENPH',
+        'solarEdge':'SEDG','array technologies':'ARRY',
+        'nextracker':'NXT','fluence':'FLNC',
+
+        // ── US REITs ──────────────────────────────────────────────────
+        'realty income':'O','national retail':'NNN',
+                'prologis':'PLD','duke realty':'PLD',
+        'equity residential':'EQR','avalonbay':'AVB',
+                'welltower':'WELL','ventas':'VTR',
+        'healthpeak':'PEAK','sabra':'SBRA',
+        'american homes':'AMH',
+        'sun communities':'SUI','equity lifestyle':'ELS',
+
+        // ── US Healthcare / Biotech ───────────────────────────────────
+        'vertex':'VRTX','vertex pharma':'VRTX',
+        'regeneron':'REGN','alnylam':'ALNY',
+        'seagen':'','immunomedics':'',
+        'biontech':'BNTX','moderna':'MRNA',
+        'novavax':'NVAX','inovio':'INO',
+        'gilead':'GILD','biogen':'BIIB',
+        'alexion':'','sarepta':'SRPT',
+        'bluebird':'BLUE','crispr':'CRSP',
+        'beam therapeutics':'BEAM','editas':'EDIT',
+        'pacific biosciences':'PACB','10x genomics':'TXG',
+        'illumina':'ILMN','agilent':'A',
+        'waters':'WAT','bruker':'BRKR',
+        'quest diagnostics':'DGX','labcorp':'LH',
+        'hologic':'HOLX','exactsciences':'EXAS',
+        'guardant':'GH','natera':'NTRA',
+        'insulet':'PODD','tandem':'TNDM',
+        'dexcom':'DXCM','abbott':'ABT',
+        'becton dickinson':'BDX','baxter':'BAX',
+        'boston scientific':'BSX','edwards':'EW',
+        'stryker':'SYK','zimmer biomet':'ZBH',
+        'smith nephew':'SNN','integra':'IART',
+        'nuvasive':'NUVA','wright medical':'',
+        'hca healthcare':'HCA','tenet':'THC',
+        'community health':'CYH','universal health':'UHS',
+        'molina':'MOH','centene':'CNC',
+
+        // ── US Banks / Financial ──────────────────────────────────────
+        'jpmorgan':'JPM','chase':'JPM',
+        'bofa':'BAC',
+        'wfc':'WFC',
+        'goldman':'GS',
+        'citigroup':'C','citi':'C','citibank':'C',
+        'us bancorp':'USB',        'pnc':'PNC','regions':'RF',
+        'fifth third':'FITB','huntington':'HBAN',
+        'key corp':'KEY','comerica':'CMA',
+        'm&t bank':'MTB','zions':'ZION',
+        'citizens':'CFG','first citizens':'FCNCA',
+        'western alliance':'WAL','svb':'',
+        'schwab':'SCHW',
+        'td ameritrade':'SCHW','etrade':'MS',
+        'raymond james':'RJF','edward jones':'',
+        'interactive brokers':'IBKR','tradeweb':'TW',
+        'cboe':'CBOE','nasdaq inc':'NDAQ','ice':'ICE',
+        'intercontinental exchange':'ICE',
+        'cme group':'CME','cboe global':'CBOE',
+        'msci':'MSCI','s&p global':'SPGI',
+        'moody':'MCO','verisk':'VRSK',
+        'fiserv':'FI','fidelity national':'FIS',
+        'global payments':'GPN','worldpay':'FIS',
+        'jack henry':'JKHY','bottomline':'',
+        'open text':'OTEX','dun bradstreet':'DNB',
+        'equifax':'EFX','transunion':'TRU','experian':'',
+
+        // ── US Hospitality / Travel ───────────────────────────────────
+        'marriott':'MAR','hilton':'HLT','hyatt':'H',
+        'ihg':'IHG','wyndham':'WH','choice hotels':'CHH',
+        'carnival':'CCL','royal caribbean':'RCL','norwegian':'NCLH',
+        'delta':'DAL','united airlines':'UAL','american airlines':'AAL',
+        'southwest':'LUV','alaska airlines':'ALK','jetblue':'JBLU',
+        'spirit airlines':'','frontier':'ULCC',
+        'las vegas sands':'LVS','mgm':'MGM','wynn':'WYNN',
+        'caesars':'CZR','penn entertainment':'PENN',
+        'draftkings':'DKNG','flutter':'FLUT','fanduel':'FLUT',
+        'golden nugget':'','betmgm':'MGM',
+
+        // ── US Defense / Aerospace ────────────────────────────────────
+        'boeing':'BA','lockheed':'LMT',
+        'raytheon':'RTX','northrop grumman':'NOC','northrop':'NOC',
+        'l3':'LHX',
+                'curtiss wright':'CW','moog':'MOG.A',
+        'kratos':'KTOS','booz allen':'BAH','saic':'SAIC',
+        'leidos':'LDOS','science applications':'SAIC',
+        'maxar':'','planet labs':'PL','spire global':'SPIR',
+        'rocket lab':'RKLB','virgin orbit':'',
+        'aerojet':'AJRD','aerojet rocketdyne':'AJRD',
+        'joby aviation':'JOBY','archer aviation':'ACHR',
+        'blade air':'BLDE','lilium':'',
+
+        // ── US Crypto / Web3 ──────────────────────────────────────────
+        'coinbase':'COIN','microstrategy':'MSTR',
+                'core scientific':'CORZ','cipher mining':'CIFR',
+        'hut 8':'HUT','bitfarms':'BITF',
+        'silvergate capital':'',
+        'ibit':'IBIT','gbtc':'GBTC','ethe':'ETHE',
+
+        // ── Indian stocks — company names ─────────────────────────────
+                                'larsen toubro':'LT.NS',                'titan company':'TITAN.NS',                        'divis labs':'DIVISLAB.NS','divislab':'DIVISLAB.NS',
+                                                                                'jubilant food':'JUBLFOOD.NS',
+        'bse':'BSE.NS','cdsl':'CDSL.NS','cams':'CAMS.NS',
+        'angel one':'ANGELONE.NS',
+        'naukri':'NAUKRI.NS','info edge':'NAUKRI.NS',
+
+        // ── International company names ───────────────────────────────
+        'samsung':'SSNLF','samsung electronics':'SSNLF',
+        'toyota':'TM','honda':'HMC','nissan':'NSANY',
+        'sony':'SONY','nintendo':'NTDOY',
+        'softbank':'SFTBY','ntt':'NTTYY',
+        'volkswagen':'VWAGY','vw':'VWAGY',
+        'bmw':'BMWYY','mercedes benz':'MBGYY','daimler':'MBGYY',
+        'siemens':'SIEGY','basf':'BASFY','bayer':'BAYRY',
+        'adidas':'ADDYY','deutsche bank':'DB',
+        'allianz':'AZSEY','airbus':'EADSY',
+        'lvmh':'LVMUY','hermes':'HESAY','loreal':'LRLCY',
+        'l\'oreal':'LRLCY','total energies':'TTE',
+        'sanofi':'SNY','bnp paribas':'BNPQY',
+        'novartis':'NVS','roche':'RHHBY',
+        'ubs':'UBS','zurich insurance':'ZURVY',
+        'alibaba':'BABA','tencent':'TCEHY',
+        'baidu':'BIDU',        'netease':'NTES','byd':'BYDDF',
+        'xpeng':'XPEV','li auto':'LI',
+        'pinduoduo':'PDD','temu':'PDD',
+        'icbc':'IDCBY','trip.com':'TCOM','ctrip':'TCOM',
+        'hyundai':'HYMTF','kia':'KIMTF',
+        'posco':'PKX','sk hynix':'HXSCF',
+        'tsmc':'TSM','taiwan semiconductor':'TSM',
+        'asml':'ASML','philips':'PHG','adyen':'ADYEY',
+        'unilever':'UL',
+        'bp':'BP','shell':'SHEL','astrazeneca':'AZN',
+        'glaxo smithkline':'GSK','gsk':'GSK',
+        'hsbc':'HSBC','vodafone':'VOD','barclays':'BCS',
+        'bhp':'BHP','petrobras':'PBR','vale':'VALE',
+        'ambev':'ABEV','enbridge':'ENB',
+        'royal bank canada':'RY','td bank':'TD',
+        'canadian national':'CNI',
       };
 
+      // Name map is now used by extractTickers() above — preserve legacy path for
+      // cases where the intent engine passed through to here
       const msgLower = msg.toLowerCase();
       const nameTickers = Object.entries(NAME_MAP)
-        .sort(([a],[b]) => b.length - a.length) // longest match first
+        .sort(([a],[b]) => b.length - a.length)
         .filter(([name]) => msgLower.includes(name))
-        .map(([,ticker]) => ticker);
+        .map(([,ticker]) => ticker)
+        .filter(t => t && t !== 'NULL');
 
-      // Combine explicit + name-matched tickers
+      // Merge: semantic extractTickers result takes priority
       let tickerMatch = [...new Set([...explicitTickers, ...nameTickers])].slice(0, 1);
 
       // ── MEMORY: if follow-up with no new ticker, use session memory ───────
@@ -3420,10 +4524,13 @@ Max 250 words. Only reference the positions and data listed above.`;
         setThinkText(`Using fresh ${this.memory.activeTicker} data (${Math.round(cacheAge)}s old)…`);
         console.log(`[Memory] Cache hit — reusing ${this.memory.activeTicker} data (${Math.round(cacheAge)}s old)`);
       } else if (tickerMatch.length > 0) {
-        setThinkText(`Fetching live data for ${tickerMatch[0]}…`);
+        // Resolve symbol with full provider-aware routing
+        const resolved = this.resolveSymbol(tickerMatch[0]);
+        const fetchSym = resolved?.apiSymbol || tickerMatch[0];
+        setThinkText(`Fetching live data for ${resolved?.displaySymbol || fetchSym}${resolved?.note ? ' (' + resolved.note + ')' : ''}…`);
         try {
           const ares  = await fetch(
-            `${CONFIG.BACKEND_URL}/analyse/${tickerMatch[0]}`,
+            `${CONFIG.BACKEND_URL}/analyse/${encodeURIComponent(fetchSym)}`,
             { headers: { 'x-finnhub-key': APP.finnhubKey } }
           );
           if (!ares.ok) throw new Error(`Backend error ${ares.status}`);
@@ -3431,24 +4538,40 @@ Max 250 words. Only reference the positions and data listed above.`;
           if (ajson.success) {
             analysisData = ajson.data;
             confidence   = ajson.data.confidence;
+
+            // If Finnhub returned empty quote for international stock, try fallback
+            if ((!analysisData.quote?.c || analysisData.quote.c === 0) && resolved) {
+              setThinkText(`${fetchSym} — trying alternate symbol…`);
+              const fallback = await ApiClient.quoteWithFallback(resolved);
+              if (fallback.quote?.c) {
+                analysisData.quote = fallback.quote;
+                analysisData.symbol = fallback.symbolUsed;
+                analysisData._providerNote = fallback.providerNote;
+                console.log(`[Chat] Fallback used: ${fallback.symbolUsed} (${fallback.providerNote})`);
+              }
+            }
+
             // Store in session memory
             this.memory.setEntity(
-              tickerMatch[0],
-              ajson.data?.profile?.name || tickerMatch[0],
+              resolved?.displaySymbol || tickerMatch[0],
+              ajson.data?.profile?.name || resolved?.displaySymbol || tickerMatch[0],
               ajson.data?.profile,
-              ajson.data
+              analysisData
             );
           } else {
             console.warn('[Chat] Analyse failed:', ajson.error?.message);
           }
         } catch(e) {
           console.warn('[Chat] Analyse fetch error:', e.message);
-          // Show helpful message instead of silent fail
           thinkDiv.querySelector('.bubble').innerHTML =
-            `<strong>⚠️ Could not reach backend</strong><br><br>` +
-            `The server may be waking up (takes ~30 seconds on free tier).<br>` +
-            `Please wait a moment and try again.<br><br>` +
-            `<small style="color:var(--tx3)">Error: ${e.message}</small>`;
+            `<div class="ai-section sec-risk">
+              <div class="ai-sec-label">⚠️ MARKET DATA TEMPORARILY UNAVAILABLE</div>
+              <div class="ai-sec-body">
+                The data provider is reconnecting. This is normal on first load (takes ~30 seconds).<br><br>
+                <strong>Please try again in a moment.</strong> Your question has been saved — just hit Send again.<br><br>
+                <small style="color:var(--tx3)">Technical: ${e.message}</small>
+              </div>
+            </div>`;
           return;
         }
       }
@@ -3488,7 +4611,11 @@ Max 250 words. Only reference the positions and data listed above.`;
       }
 
       // ── STEP 4: Build validated prompt ────────────────────────────────────
+      // If user's query had SWING intent, force swing prompt regardless of mode bar
+      const savedMode = this.investorMode;
+      if (intent.mode === 'SWING') this.investorMode = 'swing';
       const prompt = await this.buildAnalysisPrompt(msg, analysisData, confidence);
+      if (intent.mode === 'SWING') this.investorMode = savedMode;  // restore
 
       // ── STEP 5: Call Groq AI ──────────────────────────────────────────────
       document.getElementById('groqStatus').textContent = 'thinking…';
@@ -3561,18 +4688,29 @@ Max 250 words. Only reference the positions and data listed above.`;
       document.getElementById('groqStatus').textContent = 'error';
       document.getElementById('groqStatus').style.color = 'var(--rd)';
       // thinkDiv may have already been removed — guard with isConnected
+      // Professional error recovery
+      const errMsg = e.message?.includes('429')
+        ? `<div class="ai-section sec-risk"><div class="ai-sec-label">⏱ AI RATE LIMIT</div><div class="ai-sec-body">The AI is processing too many requests simultaneously. Please wait 30 seconds and try again. Your Groq free tier allows ~30 requests/minute.</div></div>`
+        : e.message?.includes('401') || e.message?.includes('403')
+        ? `<div class="ai-section sec-risk"><div class="ai-sec-label">🔑 API KEY ERROR</div><div class="ai-sec-body">Your Groq AI key appears invalid or expired. Click the ⚙ button in the top bar to update it.</div></div>`
+        : e.message?.includes('timeout') || e.message?.includes('abort')
+        ? `<div class="ai-section sec-risk"><div class="ai-sec-label">⏱ REQUEST TIMEOUT</div><div class="ai-sec-body">The analysis took longer than expected. Markets may be experiencing high volatility. Please try again.</div></div>`
+        : `<div class="ai-section sec-risk"><div class="ai-sec-label">⚠️ ANALYSIS INTERRUPTED</div><div class="ai-sec-body">A temporary error occurred. Please try again in a moment.<br><small style="color:var(--tx3)">${e.message}</small></div></div>`;
+
       if (thinkDiv.isConnected) {
-        thinkDiv.querySelector('.bubble').innerHTML =
-          `<strong>❌ Error:</strong> ${e.message}<br><br>Check your API keys and try again.`;
+        thinkDiv.querySelector('.bubble').innerHTML = errMsg;
       } else {
-        // thinkDiv was already removed — append a new error message
         const errDiv = document.createElement('div');
         errDiv.className = 'msg ai';
-        errDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><strong>❌ Error:</strong> ${e.message}<br><br>Check your API keys and try again.</div>`;
+        errDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">${errMsg}</div>`;
         document.getElementById('chatMsgs').appendChild(errDiv);
         document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
       }
     }
+    } finally {
+      this._chatBusy = false;
+      const sBtnF = document.getElementById('sBtn');
+      if (sBtnF) { sBtnF.disabled = false; sBtnF.textContent = 'Analyse →'; }
   },
 
   // ── AI RESPONSE FORMATTER — Bloomberg section renderer ────────────────────
@@ -3581,14 +4719,38 @@ Max 250 words. Only reference the positions and data listed above.`;
 
     // Section definitions: emoji prefix → colour class + label
     const sections = [
-      { prefix: '📊 SUMMARY',         cls: 'sec-summary'  },
-      { prefix: '📈 VALUATION',        cls: 'sec-valuation'},
-      { prefix: '⚡ TECHNICALS',       cls: 'sec-tech'     },
-      { prefix: '🔴 RISK',             cls: 'sec-risk'     },
-      { prefix: '🌐 MARKET CONTEXT',   cls: 'sec-macro'    },
-      { prefix: '💬 SENTIMENT',        cls: 'sec-sent'     },
-      { prefix: '🎯 VERDICT',          cls: 'sec-verdict'  },
-      { prefix: '⚠ Confidence',        cls: 'sec-conf'     },
+      // Standard analysis sections
+      { prefix: '📊 SUMMARY',               cls: 'sec-summary'      },
+      { prefix: '📈 VALUATION',              cls: 'sec-valuation'    },
+      { prefix: '⚡ TECHNICALS',             cls: 'sec-tech'         },
+      { prefix: '🔴 RISK',                  cls: 'sec-risk'         },
+      { prefix: '🌐 MARKET CONTEXT',         cls: 'sec-macro'        },
+      { prefix: '💬 SENTIMENT',              cls: 'sec-sent'         },
+      { prefix: '🎯 VERDICT',               cls: 'sec-verdict'      },
+      { prefix: '⚠ Confidence',             cls: 'sec-conf'         },
+      // Swing trading sections
+      { prefix: '⚡ SWING SETUP',            cls: 'sec-tech'         },
+      { prefix: '🎯 ENTRY ZONE',             cls: 'sec-verdict'      },
+      { prefix: '🛑 STOP LOSS',             cls: 'sec-risk'         },
+      { prefix: '💰 PROFIT TARGETS',         cls: 'sec-valuation'    },
+      { prefix: '📊 MOMENTUM STRENGTH',      cls: 'sec-summary'      },
+      { prefix: '⚠ RISK FACTORS',           cls: 'sec-risk'         },
+      { prefix: '🎯 SWING VERDICT',          cls: 'sec-verdict'      },
+      // Portfolio sections
+      { prefix: '📊 PORTFOLIO OVERVIEW',     cls: 'sec-summary'      },
+      { prefix: '📈 TOP PERFORMERS',         cls: 'sec-valuation'    },
+      { prefix: '🔴 RISK POSITIONS',         cls: 'sec-risk'         },
+      { prefix: '⚖ CONCENTRATION',          cls: 'sec-macro'        },
+      // Compare sections
+      { prefix: '📊 BUSINESS POSITIONING',   cls: 'sec-summary'      },
+      { prefix: '📈 GROWTH COMPARISON',      cls: 'sec-valuation'    },
+      { prefix: '💰 VALUATION COMPARISON',   cls: 'sec-valuation'    },
+      { prefix: '⚡ TECHNICAL COMPARISON',   cls: 'sec-tech'         },
+      { prefix: '🔴 RISK COMPARISON',        cls: 'sec-risk'         },
+      { prefix: '🎯 INVESTOR FIT',           cls: 'sec-macro'        },
+      { prefix: '🏆 RELATIVE VERDICT',       cls: 'sec-verdict'      },
+      // Scanner sections
+      { prefix: '📊 SCANNER REQUEST DETECTED', cls: 'sec-summary'   },
     ];
 
     // Split into labelled sections
@@ -3980,11 +5142,11 @@ Do NOT guess any prices, metrics, or financial data. Keep response under 50 word
 
     const f = (v, s = '') => v != null && v !== 0 ? `${Number(v).toFixed(2)}${s}` : 'N/A';
 
-    // Fetch candle data best-effort for technical indicators (non-blocking)
+    // Fetch candle data best-effort — uses provider fallback for international stocks
     let candles = null;
     try {
-      candles = await ApiClient.candles(symbol, 220);
-      // Validate candle response structure
+      const resolvedForCandles = this.resolveSymbol(symbol);
+      candles = await ApiClient.candlesWithFallback(resolvedForCandles, 220);
       if (!candles?.c?.length || candles.s === 'no_data') candles = null;
     } catch(e) { candles = null; }
 
@@ -4035,11 +5197,18 @@ Do NOT guess any prices, metrics, or financial data. Keep response under 50 word
       ? `P/E(TTM)=${f(metrics.peTTM)}x | FwdP/E=${fwdPE ? f(fwdPE)+'x' : 'N/A'} | PEG=${peg ? f(peg) : 'N/A'} | EPS=$${f(metrics.epsTTM)} | RevGrowth=${f(metrics['revenueGrowthTTMYoy'],'%')} | EarningsGrowth=${egr ? f(egr,'%') : 'N/A'} | GrossMargin=${f(metrics.grossMarginTTM,'%')} | ROE=${f(metrics.roeTTM,'%')} | ${targetStr}`
       : 'VALUATION: Metrics unavailable — do not fabricate any ratios';
 
+    // Swing trading mode — use isolated swing prompt, not generic analysis
+    if (this.investorMode === 'swing' && analysisData?.quote) {
+      const technicals = this.computeTechnicals(metrics, quote, await ApiClient.candles(symbol, 60).catch(() => null));
+      const risk = this.calculateRisk(metrics, quote, technicals);
+      return this.buildSwingPrompt(symbol, quote, technicals, risk) + `\n\nUSER QUESTION: ${userMessage}`;
+    }
+
     // Investor mode context injection
     const modeContexts = {
       balanced:     'Analyse objectively. Balance growth, value, and risk.',
       longterm:     'Focus on 3–5 year fundamentals, compounding potential, and durable competitive advantages. Deprioritize short-term volatility.',
-      swing:        'Focus on 5–20 day momentum, technical setups, and entry/exit points. Include support/resistance context.',
+      swing:        'Focus on 5–20 day momentum, technical setups, entry/exit points. Include support/resistance context. Prioritise RSI and MACD over fundamentals.',
       conservative: 'Prioritize capital preservation. Flag all risks prominently. Prefer defensive, dividend-paying stocks.',
       aggressive:   'Focus on high-growth potential and momentum catalysts. Accept higher volatility for higher returns.',
       value:        'Emphasise intrinsic value vs current price. Use P/E, P/B, FCF yield, and margin of safety concepts.',
@@ -4194,7 +5363,20 @@ Start with BUY, HOLD, or SELL. One sentence (max 25 words). Cite the specific pr
   // ── HEATMAP ───────────────────────────────────────────────────────────────
   async loadHeatmap() {
     const container = document.getElementById('heatmapContainer');
-    const symbols   = ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'TSLA', 'META', 'AMZN', 'AMD', 'NFLX', 'PYPL', 'CRM', 'ORCL'];
+    const symbols   = [
+      // US Tech Mega Cap
+      'AAPL','MSFT','NVDA','GOOGL','META','AMZN','TSLA','AMD',
+      // US Growth
+      'NFLX','CRM','SNOW','PLTR','ARM','CRWD','NET','COIN',
+      // US Value
+      'JPM','V','JNJ','PG','KO','XOM','WMT',
+      // US Healthcare
+      'LLY','UNH','ABBV','MRK','PFE',
+      // Indian Large Cap (ADR where available)
+      'INFY','HDB','IBN','WIT','TTM',
+      // Global ADRs
+      'TSM','BABA','TM','SONY','SAP','BP','SHEL','AZN',
+    ];
 
     container.innerHTML = symbols.map(s =>
       `<div class="hm-cell shimmer" id="hm-${s}" style="min-height:72px"></div>`
@@ -4359,17 +5541,43 @@ Max 300 words. Reference specific prices and % changes from the data above. Do n
     const btn = document.getElementById('scanBtn');
     btn.disabled = true; btn.textContent = '⏳ Scanning…';
 
-    // Scan a curated cross-market universe
-    const symbols = ['AAPL','MSFT','NVDA','TSLA','GOOGL','META','AMZN','AMD',
-                     'NFLX','PYPL','SHOP','PLTR','COIN','SOFI','HOOD',
-                     'SPY','QQQ','DIA'];
+    // Scan a curated cross-market universe — US, Indian, and Global ADRs
+    const symbols = [
+      // ── US Mega Cap Tech ──────────────────────────────────────────────
+      'AAPL','MSFT','NVDA','TSLA','GOOGL','META','AMZN','AMD',
+      // ── US Growth / AI / Cloud ────────────────────────────────────────
+      'NFLX','CRM','SNOW','PLTR','ARM','CRWD','PANW','NET','DDOG',
+      'NOW','WDAY','MDB','SHOP','COIN','SOFI','HOOD','PYPL',
+      // ── US Value / Dividend ───────────────────────────────────────────
+      'JPM','BAC','GS','V','MA','BRK.B','JNJ','PG','KO','PEP',
+      'XOM','CVX','WMT','COST','HD','MCD','DIS',
+      // ── US Healthcare / Pharma ────────────────────────────────────────
+      'LLY','UNH','ABBV','MRK','PFE','MRNA','AMGN','GILD','REGN',
+      // ── US Semiconductor ─────────────────────────────────────────────
+      'TSM','QCOM','AVGO','INTC','MU','AMAT','LRCX','ASML',
+      // ── US ETFs / Market ─────────────────────────────────────────────
+      'SPY','QQQ','DIA','IWM','VXX',
+      // ── Indian Large Cap NSE ──────────────────────────────────────────
+      'RELIANCE.NS','TCS.NS','HDFCBANK.NS','INFY.NS','ICICIBANK.NS',
+      'BAJFINANCE.NS','LT.NS','SBIN.NS','AXISBANK.NS','KOTAKBANK.NS',
+      'WIPRO.NS','HCLTECH.NS','MARUTI.NS','TATAMOTORS.NS','ADANIENT.NS',
+      'TITAN.NS','ITC.NS','ZOMATO.NS','SUNPHARMA.NS','BHARTIARTL.NS',
+      // ── Indian Midcap NSE ─────────────────────────────────────────────
+      'BAJAJ-AUTO.NS','EICHERMOT.NS','TVSMOTOR.NS','DIVISLAB.NS',
+      'ADANIPORTS.NS','TATAPOWER.NS','POWERGRID.NS','NTPC.NS',
+      'IRCTC.NS','HAL.NS','BEL.NS','RVNL.NS',
+      // ── Global ADRs ───────────────────────────────────────────────────
+      'TSM','BABA','BIDU','TM','SONY','NVO','SAP','UL',
+      'BP','SHEL','AZN','HSBC','RIO','BHP','VALE',
+    ];
 
     const results = await ApiClient.batchQuotes(symbols);
 
     const bull = [], bear = [], momentum = [], oversold = [], volatile = [], aiPicks = [];
 
     for (const r of results) {
-      if (!r.quote?.c || !r.quote?.dp) continue;
+      // Skip symbols that returned empty (Finnhub may not cover them)
+      if (!r.quote?.c || r.quote.c === 0) continue;
       const q  = r.quote;
       const dp = q.dp;
       const dayRange = q.h && q.l ? ((q.h - q.l) / q.c * 100) : 0;
