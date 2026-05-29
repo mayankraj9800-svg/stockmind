@@ -5,8 +5,21 @@ const { suite, test, eq, ok, notOk } = require('./helpers/runner');
 
 const finnhub  = require(path.join(__dirname, '..', 'backend', 'src', 'services', 'finnhub'));
 const aiEngine = require(path.join(__dirname, '..', 'backend', 'src', 'services', 'aiEngine'));
+const yahoo    = require(path.join(__dirname, '..', 'backend', 'src', 'services', 'yahoo'));
 
 module.exports = function run() {
+  suite('Backend — Yahoo quote fallback (NSE 403 recovery)');
+  test('valid meta → normalized quote with d/dp', () => {
+    const q = yahoo.normalizeYahooMeta({ regularMarketPrice: 1321.2, chartPreviousClose: 1300, regularMarketOpen: 1305, regularMarketDayHigh: 1330, regularMarketDayLow: 1298, regularMarketTime: 1700000000 });
+    ok(q && q.c === 1321.2); eq(Math.round(q.d), 21); ok(q._provider === 'yahoo');
+  });
+  test('missing meta → null (no fabricated price)', () => eq(yahoo.normalizeYahooMeta(null), null));
+  test('zero/invalid price → null', () => eq(yahoo.normalizeYahooMeta({ regularMarketPrice: 0 }), null));
+  test('previous-close fallback chain works', () => {
+    const q = yahoo.normalizeYahooMeta({ regularMarketPrice: 100, regularMarketPreviousClose: 90 });
+    ok(q && q.pc === 90 && Math.round(q.dp) === 11);
+  });
+
   suite('Backend — normalizeTicker (Error 3: RELIANCE.NS 400)');
   test('RELIANCE.NS accepted (was rejected by 10-char cap)', () => eq(finnhub.normalizeTicker('RELIANCE.NS'), 'RELIANCE.NS'));
   test('TATAMOTORS.NS accepted', () => eq(finnhub.normalizeTicker('TATAMOTORS.NS'), 'TATAMOTORS.NS'));

@@ -26,29 +26,45 @@
     lastComparison:      null,   // [sym, sym, ...]
     lastPortfolio:       null,   // portfolio object from PortfolioEngine
     lastWatchlist:       null,   // watchlist object from WatchlistEngine
+    lastScanner:         null,   // scanner results { region, results:[...] }
     lastETF:             null,   // last ETF symbol discussed
+    activeTopic:         null,   // 'stock'|'comparison'|'portfolio'|'watchlist'|'scanner'|'etf'
     lastUserProfile:     { riskTolerance: null, age: null, horizon: null, income: null, country: null },
     turns:               [],
     updatedAt:           0,
 
+    // The active topic owns follow-up resolution. Switching topics clears the
+    // others so a stale portfolio/comparison can never hijack a new subject
+    // ("wrong context" / random-ticker bug).
+    _switchTopic(topic) {
+      this.activeTopic = topic;
+      if (topic !== 'comparison') { this.lastComparison = null; this.lastSecondarySymbol = null; }
+      if (topic !== 'portfolio')  this.lastPortfolio = null;
+      if (topic !== 'watchlist')  this.lastWatchlist = null;
+      if (topic !== 'scanner')    this.lastScanner = null;
+      if (topic !== 'stock' && topic !== 'comparison' && topic !== 'etf') this.lastPrimarySymbol = null;
+      this.updatedAt = Date.now();
+    },
+
     // ── setters ───────────────────────────────────────────────────────────
     setStock(symbol, entity) {
+      this._switchTopic('stock');
       this.lastPrimarySymbol = symbol || null;
       this.lastSecondarySymbol = null;
-      this.lastComparison = null;       // a single stock ends any comparison
       this.lastEntity = entity || symbol || null;
-      this.updatedAt = Date.now();
     },
     setComparison(symbols) {
       const arr = (symbols || []).filter(Boolean);
-      this.lastComparison = arr.length >= 2 ? arr.slice(0, 3) : null;
-      this.lastPrimarySymbol = arr[0] || this.lastPrimarySymbol;
+      if (arr.length < 2) return;
+      this._switchTopic('comparison');
+      this.lastComparison = arr.slice(0, 3);
+      this.lastPrimarySymbol = arr[0];
       this.lastSecondarySymbol = arr[1] || null;
-      this.updatedAt = Date.now();
     },
-    setPortfolio(p) { this.lastPortfolio = p || null; this.updatedAt = Date.now(); },
-    setWatchlist(w) { this.lastWatchlist = w || null; this.updatedAt = Date.now(); },
-    setETF(sym)     { this.lastETF = sym || null; this.lastPrimarySymbol = sym || this.lastPrimarySymbol; this.updatedAt = Date.now(); },
+    setPortfolio(p) { this._switchTopic('portfolio'); this.lastPortfolio = p || null; },
+    setWatchlist(w) { this._switchTopic('watchlist'); this.lastWatchlist = w || null; },
+    setScanner(s)   { this._switchTopic('scanner');   this.lastScanner = s || null; },
+    setETF(sym)     { this._switchTopic('etf'); this.lastETF = sym || null; this.lastPrimarySymbol = sym || null; },
     setProfile(partial) {
       if (!partial) return;
       for (const k of ['riskTolerance', 'age', 'horizon', 'income', 'country'])
@@ -83,23 +99,31 @@
       const capsTokens = (m.match(/\b[A-Z]{2,5}\b/g) || []).filter(t => !reservedCaps(t));
       const hasNewTicker = capsTokens.length > 0;
 
+      // Follow-ups resolve ONLY against the active topic — a stale portfolio or
+      // comparison can never hijack a different subject.
+
       // comparison follow-up: "which has a stronger moat / which is safer / them"
-      if (this.lastComparison && !hasNewTicker &&
+      if (this.activeTopic === 'comparison' && this.lastComparison && !hasNewTicker &&
           /\b(which|stronger|weaker|safer|riskier|better|worse|moat|cheaper|both|them|the (former|latter)|first one|second one)\b/i.test(m))
         return { kind: 'comparison-followup', symbols: [...this.lastComparison] };
 
-      // portfolio follow-up: "which holding is riskiest / replace it / rebalance"
-      if (this.lastPortfolio &&
-          /\b(which (holding|position|stock)|riskiest|replace (it|the)|how much safer|rebalance|the portfolio|annual income|dividend income)\b/i.test(m))
+      // portfolio follow-up: riskiest / replace / rebalance / capital / compare-within
+      if (this.activeTopic === 'portfolio' && this.lastPortfolio && !hasNewTicker &&
+          /\b(which (holding|position|stock|one)|riskiest|most risk|highest risk|replace (it|the)|safer alternative|how much safer|risk (has |)changed|rebalance|the portfolio|annual income|dividend income|the (top|two)|top (two|positions)|additional capital|add (capital|more)|allocate more|increase|more capital)\b/i.test(m))
         return { kind: 'portfolio-followup', portfolio: this.lastPortfolio };
 
       // watchlist follow-up
-      if (this.lastWatchlist &&
-          /\b(which (one|stock)|highest upside|strongest balance|lowest valuation|buy today|from (the|that) (list|watchlist))\b/i.test(m) && !hasNewTicker)
+      if (this.activeTopic === 'watchlist' && this.lastWatchlist && !hasNewTicker &&
+          /\b(which (one|stock)|highest upside|strongest balance|lowest valuation|buy today|from (the|that) (list|watchlist))\b/i.test(m))
         return { kind: 'watchlist-followup', watchlist: this.lastWatchlist };
 
+      // scanner follow-up: "which has the best setup / highest upside / safest"
+      if (this.activeTopic === 'scanner' && this.lastScanner && !hasNewTicker &&
+          /\b(which (one|stock|has)|best setup|strongest|highest upside|safest|riskiest|top (pick|setup))\b/i.test(m))
+        return { kind: 'scanner-followup', scanner: this.lastScanner };
+
       // single-stock follow-up: "its risks", generic question with no new ticker
-      if (this.lastPrimarySymbol && !hasNewTicker && this.isFollowUp(m))
+      if (this.activeTopic === 'stock' && this.lastPrimarySymbol && !hasNewTicker && this.isFollowUp(m))
         return { kind: 'single-followup', symbol: this.lastPrimarySymbol };
 
       return { kind: 'none' };
@@ -109,7 +133,7 @@
       const m = (msg || '').trim();
       const patterns = [
         /\b(it|its|this|that|they|their|the company|the stock|the same|more about|tell me more|what about|how about)\b/i,
-        /^(what|how|why|is|does|did|has|have|can|will|would|should|when)\b/i,
+        /^(what|how|why|is|does|did|has|have|can|will|would|should|when|which|are|do)\b/i,
         /^(and|also|but|so|then|what if|what's|what is|what are)\b/i,
       ];
       return patterns.some(p => p.test(m));
@@ -117,7 +141,8 @@
 
     clear() {
       this.lastPrimarySymbol = this.lastSecondarySymbol = this.lastComparison = null;
-      this.lastPortfolio = this.lastWatchlist = this.lastETF = this.lastEntity = null;
+      this.lastPortfolio = this.lastWatchlist = this.lastScanner = this.lastETF = this.lastEntity = null;
+      this.activeTopic = null;
       this.lastUserProfile = { riskTolerance: null, age: null, horizon: null, income: null, country: null };
       this.turns = []; this.updatedAt = 0;
     },

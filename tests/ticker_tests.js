@@ -57,6 +57,15 @@ module.exports = function run() {
   test('SAMSUNG → SSNLF', () => eq(APP.resolveSymbol('SAMSUNG').apiSymbol, 'SSNLF'));
   test('INFOSYS → INFY ADR', () => eq(APP.resolveSymbol('INFOSYS').apiSymbol, 'INFY'));
 
+  suite('Ticker — resolveSymbol resolves company NAMES before routing (Priority 4)');
+  test('resolveSymbol("NVIDIA") === resolveSymbol("NVDA")', () => eq(APP.resolveSymbol('NVIDIA').apiSymbol, APP.resolveSymbol('NVDA').apiSymbol));
+  test('resolveSymbol("MICROSOFT") → MSFT', () => eq(APP.resolveSymbol('MICROSOFT').apiSymbol, 'MSFT'));
+  test('resolveSymbol("GOOGLE") → GOOGL', () => eq(APP.resolveSymbol('GOOGLE').apiSymbol, 'GOOGL'));
+  test('resolveSymbol("TESLA") → TSLA', () => eq(APP.resolveSymbol('TESLA').apiSymbol, 'TSLA'));
+  test('ADR still wins over name map: INFOSYS → INFY (not INFY.NS)', () => eq(APP.resolveSymbol('INFOSYS').apiSymbol, 'INFY'));
+  test('raw ticker unaffected: AAPL → AAPL', () => eq(APP.resolveSymbol('AAPL').apiSymbol, 'AAPL'));
+  test('short ticker not mis-aliased: V → V', () => eq(APP.resolveSymbol('V').apiSymbol, 'V'));
+
   suite('Crypto — never silently mapped to a stock/ETF (H)');
   test('bitcoin detected as crypto', () => ok(APP._detectCrypto('should I buy bitcoin')));
   test('ethereum detected as crypto', () => ok(APP._detectCrypto('ethereum price?')));

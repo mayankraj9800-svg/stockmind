@@ -113,6 +113,22 @@ router.post('/batch/quotes', async (req, res) => {
 router.get('/analyse/:symbol', async (req, res) => {
   try {
     const data       = await finnhub.getFullAnalysisData(req.finnhubKey, req.params.symbol);
+
+    // ── PROVIDER FALLBACK: if Finnhub returned no quote (e.g. NSE .NS → 403),
+    // recover the price from Yahoo at the SOURCE so /analyse is never a
+    // priceless response. Frontend no longer the sole place this is patched.
+    if (!data.quote || !data.quote.c) {
+      const yahoo = require('../services/yahoo');
+      const yq = await yahoo.getYahooQuote(data.symbol);
+      if (yq) {
+        data.quote = { ...yq, symbol: data.symbol, _meta: { reliability: 'medium', freshness: 'recent', provider: 'yahoo' } };
+        data.quoteProvider = 'yahoo';
+        logger.providerSwitch({ from: 'finnhub', to: 'yahoo', ticker: data.symbol, reason: 'quote fetch failed/empty' });
+        // Recompute data-quality now that a price exists.
+        if (data.quote.c) { data.dataQuality.score += 40; data.dataQuality.canAnalyse = data.dataQuality.score >= 40; }
+      }
+    }
+
     const confidence = aiEngine.calculateConfidence(data);
 
     // ── STRICT FUNDAMENTAL VALIDATION ──────────────────────────────────────

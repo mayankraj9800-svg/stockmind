@@ -2137,7 +2137,7 @@ const APP = {
     isFollowUp(msg) {
       const followUpPatterns = [
         /\b(it|its|this|that|they|their|the company|the stock|the same|this stock|this company|more about|tell me more|what about|how about)\b/i,
-        /^(what|how|why|is|does|did|has|have|can|will|would|should|when)\b/i,
+        /^(what|how|why|is|does|did|has|have|can|will|would|should|when|which|are|do)\b/i,
         /^(and|also|but|so|then|what if|what\'s|what is|what are)\b/i,
       ];
       // BUG FIX: the old test `/\b[A-Z]{2,5}\b/` flagged ANY all-caps run as a
@@ -3926,6 +3926,18 @@ Max 250 words. Only reference the positions and data listed above.`;
       };
     }
 
+    // ── 2b. COMPANY-NAME ALIAS (Priority 4): a typed company NAME with no ADR
+    // entry resolves to its ticker BEFORE provider routing, so "NVIDIA"→NVDA
+    // everywhere (chat, chart box), not only inside extractTickers. ADR map
+    // above takes precedence; length≥3 guard avoids short-ticker collisions.
+    if (stripped.length >= 3) {
+      try {
+        const nm = this._getNameMap ? this._getNameMap() : null;
+        const alias = nm && nm[stripped.toLowerCase()];
+        if (alias && alias.toUpperCase() !== stripped) return this.resolveSymbol(alias);
+      } catch (_) {}
+    }
+
     // ── 3. Pure NSE stock — use .NS suffix ────────────────────────────
     if (this._NSE_ONLY.has(stripped)) {
       return { apiSymbol: `${stripped}.NS`, tradingviewSymbol: `NSE:${stripped}`, displaySymbol: stripped, exchange: 'NSE', provider: 'Finnhub', note: 'NSE' };
@@ -4025,9 +4037,15 @@ Max 250 words. Only reference the positions and data listed above.`;
     // portfolio", "dividend portfolio"). The app does NOT generate weighted
     // allocations/income — route to an honest capability response instead of
     // silently sending the user to the scanner.
-    const isBuildPort = /\b(build|create|construct|make|design|put together|allocate)\b/i.test(msg) &&
-                        /\b(portfolio|allocation|allocations)\b/i.test(msg) &&
-                        !/\bmy\b/i.test(msg);
+    // Portfolio build: "build/create a portfolio", "diversify", or "invest $X".
+    // Portfolio intent is checked BEFORE scanner so it always wins (Priority 2).
+    const isBuildPort = !/\bmy\b/i.test(msg) && (
+      (/\b(build|create|construct|make|design|put together|allocate)\b/i.test(msg) &&
+       /\b(portfolio|allocation|allocations)\b/i.test(msg)) ||
+      /\bdiversify\b/i.test(msg) ||
+      /\b(invest|deploy|put)\s+(?:\$|₹|rs\.?|inr|usd)?\s?[\d,]{3,}(?:\s?(?:k|m|thousand|lakh|crore|million))?\b/i.test(msg) ||
+      /\b(retirement|dividend|growth|aggressive|conservative|balanced)\s+portfolio\b/i.test(msg)
+    );
     if (isBuildPort) {
       return { mode: 'PORTFOLIO_BUILD', namedTickers: this.extractTickers(msg, this._getNameMap()).slice(0, 8) };
     }
@@ -4058,7 +4076,11 @@ Max 250 words. Only reference the positions and data listed above.`;
 
     // ── COMPARE FOLLOW-UP: "which has a stronger moat?" after a compare ──
     // Preserves both companies; no new ticker introduced.
-    if (this.memory.isComparisonFollowUp(msg)) {
+    // GUARD against context drift: only treat as a comparison follow-up when a
+    // comparison is genuinely the ACTIVE topic. Otherwise a stale comparison
+    // (e.g. after building a portfolio) would hijack "which one..." questions.
+    const ccTopic = (typeof window !== 'undefined' && window.ConversationContext) ? window.ConversationContext.activeTopic : null;
+    if (this.memory.isComparisonFollowUp(msg) && (ccTopic === 'comparison' || ccTopic == null)) {
       return { mode: 'COMPARE', followUp: true };
     }
 
@@ -4425,7 +4447,7 @@ RESPOND IN THIS EXACT FORMAT:
         thinkDiv.remove();
         const profile = (window.ConversationContext ? ConversationContext.extractProfile(msg) : {});
         if (window.ConversationContext) ConversationContext.setProfile(profile);
-        const amount = this._parseAmount(msg);
+        const amount = this._parseAmount(msg) || (profile.country === 'IN' ? 1000000 : 100000);
         const themes = [];
         if (/\bai\b|artificial intel/i.test(msg)) themes.push('ai');
         if (/cloud|cyber|semic|tech/i.test(msg)) themes.push('technology');
@@ -4452,13 +4474,32 @@ RESPOND IN THIS EXACT FORMAT:
           let html;
           if (/replace|safer alternative|swap/i.test(msg)) {
             const np = window.PortfolioEngine.replaceRiskiest(p);
-            ConversationContext.setPortfolio(np);
-            html = `<div class="ai-section sec-verdict"><div class="ai-sec-label">🔁 SAFER PORTFOLIO</div><div class="ai-sec-body">Replaced riskiest holding <strong>${this._escapeHtml(np.removed)}</strong> with <strong>${this._escapeHtml(np.added)}</strong>. Risk score ${p.riskScore} → <strong>${np.riskScore}</strong> (−${np.riskReduction}).</div></div>` + this._renderPortfolio(np, 'Rebalanced portfolio');
+            if (!np || np.removed === np.added || (np.riskReduction || 0) <= 0) {
+              // Already at the lowest-risk allocation — no safer swap exists.
+              html = `<div class="ai-section sec-summary"><div class="ai-sec-label">✅ ALREADY LOW RISK</div><div class="ai-sec-body">This is already a low-risk (${this._escapeHtml(p.type)}) allocation at risk score <strong>${p.riskScore}</strong>/100 — there's no meaningfully safer holding to swap in without moving to cash/bonds. Tell me if you'd like a higher cash/bond weighting.</div></div>`;
+            } else {
+              ConversationContext.setPortfolio(np);
+              html = `<div class="ai-section sec-verdict"><div class="ai-sec-label">🔁 SAFER PORTFOLIO</div><div class="ai-sec-body">Replaced riskiest holding <strong>${this._escapeHtml(np.removed)}</strong> with <strong>${this._escapeHtml(np.added)}</strong>. Risk score ${p.riskScore} → <strong>${np.riskScore}</strong> (−${np.riskReduction}).</div></div>` + this._renderPortfolio(np, 'Rebalanced portfolio');
+            }
           } else if (/riskiest|most risk|highest risk/i.test(msg)) {
             const w = window.PortfolioEngine.riskiestHolding(p);
             html = `<div class="ai-section sec-risk"><div class="ai-sec-label">🔴 RISKIEST HOLDING</div><div class="ai-sec-body"><strong>${this._escapeHtml(w.symbol)}</strong> (${this._escapeHtml(w.name)}, ${this._escapeHtml(w.sector)}) — risk tier ${w.riskTier}/5 at ${w.weight}% weight. Say "replace it with something safer" to rebalance.</div></div>`;
           } else if (/income|yield/i.test(msg)) {
             html = `<div class="ai-section sec-valuation"><div class="ai-sec-label">💰 INCOME</div><div class="ai-sec-body">Estimated yield <strong>${p.expectedYield}%</strong> → ~<strong>${p.currency}${p.annualIncome.toLocaleString()}</strong>/yr on ${p.currency}${p.amount.toLocaleString()}. <em>Reference estimate, not live.</em></div></div>`;
+          } else if (/risk (has |)changed|how has the portfolio/i.test(msg)) {
+            html = `<div class="ai-section sec-summary"><div class="ai-sec-label">📉 PORTFOLIO RISK</div><div class="ai-sec-body">Current risk score <strong>${p.riskScore}</strong>/100 (${this._escapeHtml(p.type)}). Expected yield ${p.expectedYield}%. ${this._escapeHtml(p.recession || '')}</div></div>`;
+          } else if (/compare/i.test(msg)) {
+            // Compare the top-two positions using the portfolio's own verified
+            // weights/sectors/risk tiers (no live fetch needed) — stays in-context.
+            const top = [...(p.holdings || [])].sort((a, b) => b.weight - a.weight).slice(0, 2);
+            if (top.length >= 2) {
+              // Informational compare within the portfolio — do NOT switch topic.
+              const row = h => `<tr><td style="padding:2px 10px 2px 0"><strong>${this._escapeHtml(h.symbol)}</strong></td><td style="padding:2px 10px 2px 0">${this._escapeHtml(h.sector)}</td><td style="padding:2px 10px 2px 0">${h.weight}%</td><td style="padding:2px 10px 2px 0">tier ${h.riskTier}/5</td><td>${h.yield}% yld</td></tr>`;
+              html = `<div class="ai-section sec-summary"><div class="ai-sec-label">📊 TOP TWO POSITIONS: ${this._escapeHtml(top[0].symbol)} vs ${this._escapeHtml(top[1].symbol)}</div><div class="ai-sec-body"><table style="font-size:11px;border-collapse:collapse"><tr style="color:var(--tx3)"><td style="padding-right:10px">Holding</td><td style="padding-right:10px">Sector</td><td style="padding-right:10px">Weight</td><td style="padding-right:10px">Risk</td><td>Yield</td></tr>${row(top[0])}${row(top[1])}</table><br>Ask "which one is better?" for live-data analysis of these two.</div></div>`;
+            } else { html = this._renderPortfolio(p, 'Current portfolio'); }
+          } else if (/additional capital|add (capital|more)|allocate more|increase|more capital|which one/i.test(msg)) {
+            const safest = [...(p.holdings || [])].sort((a, b) => (a.riskTier - b.riskTier) || (b.weight - a.weight))[0];
+            html = `<div class="ai-section sec-verdict"><div class="ai-sec-label">➕ WHERE TO ADD CAPITAL</div><div class="ai-sec-body">On a risk-adjusted basis the lowest-risk holding is <strong>${this._escapeHtml(safest.symbol)}</strong> (${this._escapeHtml(safest.sector)}, tier ${safest.riskTier}/5) — adding there reduces overall portfolio risk. For higher growth, the highest-conviction sleeve is your largest weight. <em>Allocation is your decision — not financial advice.</em></div></div>`;
           } else {
             html = this._renderPortfolio(p, 'Current portfolio');
           }
@@ -4474,6 +4515,21 @@ RESPOND IN THIS EXACT FORMAT:
           const rows = items.map(i => `<tr><td style="padding:2px 8px 2px 0"><strong>${this._escapeHtml(i.ticker)}</strong></td><td>${this._escapeHtml(i.company)}</td></tr>`).join('');
           const d = document.createElement('div'); d.className = 'msg ai';
           d.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><div class="ai-section sec-summary"><div class="ai-sec-label">📋 FROM YOUR WATCHLIST (${this._escapeHtml(ref.watchlist.theme)})</div><div class="ai-sec-body">Ask me to <strong>analyse</strong> or <strong>compare</strong> any of these for live data — I won't rank them without verified fundamentals.<br><table style="font-size:11px;margin-top:4px">${rows}</table></div></div></div>`;
+          document.getElementById('chatMsgs').appendChild(d);
+          document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+          return;
+        }
+        if (ref.kind === 'scanner-followup') {
+          thinkDiv.remove();
+          const s = ref.scanner;
+          const pick = (arr) => (arr && arr.length ? arr.map(x => `${this._escapeHtml(x.sym)} (${this._escapeHtml(x.note)})`).join(', ') : 'none detected');
+          let label, body;
+          if (/safest|safe|lowest risk/i.test(msg))            { label = '🟢 SAFEST FROM SCAN'; body = `Lowest-volatility leaders: ${pick(s.bull)}. Avoid the high-volatility names: ${pick(s.volatile)}.`; }
+          else if (/upside|highest|best setup|strongest|momentum/i.test(msg)) { label = '🚀 STRONGEST SETUPS'; body = `Momentum/breakout leaders: ${pick(s.momentum.length ? s.momentum : s.aiPicks)}. Top AI picks: ${pick(s.aiPicks)}.`; }
+          else if (/riskiest|highest risk|most volatile/i.test(msg)) { label = '🔴 RISKIEST FROM SCAN'; body = `Highest intraday volatility: ${pick(s.volatile)}; biggest decliners: ${pick(s.bear)}.`; }
+          else { label = '📊 SCAN RESULTS'; body = `Bullish: ${pick(s.bull)}. Momentum: ${pick(s.momentum)}. AI picks: ${pick(s.aiPicks)}.`; }
+          const d = document.createElement('div'); d.className = 'msg ai';
+          d.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><div class="ai-section sec-summary"><div class="ai-sec-label">${label}</div><div class="ai-sec-body">${body}<br><br>Ask me to <strong>analyse</strong> any ticker for verified data — these are intraday signals only.</div></div></div>`;
           document.getElementById('chatMsgs').appendChild(d);
           document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
           return;
@@ -4500,7 +4556,7 @@ RESPOND IN THIS EXACT FORMAT:
 
       // ── COMPARE mode: fetch both stocks and use institutional compare ──────
       if (intent.mode === 'COMPARE') {
-        let cmpTickers = this.extractTickers(msg, this._getNameMap()).slice(0, 3);
+        let cmpTickers = this.extractTickers(msg, this._getNameMap()).slice(0, 4);
         // Follow-up ("which has a stronger moat?") — reuse the stored pair so
         // neither company is lost and no random stock is substituted.
         if (cmpTickers.length < 2 && this.memory.activeComparison?.length >= 2) {
@@ -4549,20 +4605,40 @@ RESPOND IN THIS EXACT FORMAT:
             const risk    = this.calculateRisk(metrics, quote, tech);
             return { symbol: resolved?.displaySymbol || sym, quote, profile, metrics, technicals: tech, risk };
           }));
+          // Always preserve comparison context even if rendering degrades.
+          this.memory.setComparison(cmpTickers);
+          this.memory.activeTicker = null;
+          if (window.ConversationContext) ConversationContext.setComparison(cmpTickers);
+
+          // Graceful guard: if NO stock returned a usable price, don't run the
+          // AI on empty data — explain instead of throwing a COMPARE ERROR.
+          const withPrice = stocksData.filter(s => s.quote && s.quote.c > 0);
+          if (withPrice.length < 2) {
+            if (thinkDiv.isConnected) thinkDiv.remove();
+            const failed = stocksData.filter(s => !(s.quote && s.quote.c > 0)).map(s => s.symbol).join(', ');
+            const d = document.createElement('div'); d.className = 'msg ai';
+            d.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><div class="ai-section sec-risk"><div class="ai-sec-label">📊 COMPARISON LIMITED</div><div class="ai-sec-body">Couldn't fetch reliable live prices for <strong>${this._escapeHtml(failed || cmpTickers.join(', '))}</strong> right now (provider coverage/limit). Try again in a moment, or analyse each ticker individually.</div></div></div>`;
+            document.getElementById('chatMsgs').appendChild(d);
+            document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+            return;
+          }
+
           const cmpPrompt = this.buildComparePromptV2(stocksData, intent.followUp ? msg : '');
           setThinkText('Running institutional comparison…');
           const result = await this.callGroqAI(cmpPrompt);
           if (thinkDiv.isConnected) thinkDiv.remove();
           const aiDiv = document.createElement('div');
           aiDiv.className = 'msg ai';
-          aiDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">${this.formatAIResponse(result)}<div style="margin-top:8px;font-size:9px;color:var(--tx3)">⚠ Live data comparison · Not financial advice</div></div>`;
+          if (!result) {
+            // Groq unavailable — show the verified data table instead of a blank/error bubble.
+            const rows = withPrice.map(s => `${this._escapeHtml(s.symbol)}: $${s.quote.c?.toFixed(2)} (${s.quote.dp >= 0 ? '+' : ''}${s.quote.dp?.toFixed(2)}%) · Risk ${s.risk.level}`).join('<br>');
+            aiDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><div class="ai-section sec-summary"><div class="ai-sec-label">📊 ${this._escapeHtml(cmpTickers.join(' vs '))} — LIVE DATA</div><div class="ai-sec-body">${rows}<br><br>AI commentary is unavailable right now (check your Groq key). The verified prices above are correct.</div></div></div>`;
+          } else {
+            aiDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">${this.formatAIResponse(result)}<div style="margin-top:8px;font-size:9px;color:var(--tx3)">⚠ Live data comparison · Not financial advice</div></div>`;
+          }
           document.getElementById('chatMsgs').appendChild(aiDiv);
           document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
-          this.saveToHistory(`Compare: ${cmpTickers.join(' vs ')}`, result, null);
-          // Preserve both tickers so the NEXT message ("which is safer?") keeps
-          // the comparison context instead of losing a company.
-          this.memory.setComparison(cmpTickers);
-          this.memory.activeTicker = null; // a comparison is active, not a single stock
+          this.saveToHistory(`Compare: ${cmpTickers.join(' vs ')}`, result || '(data only)', null);
         } catch(e) {
           if (thinkDiv.isConnected) thinkDiv.remove();
           const errDiv = document.createElement('div');
@@ -5166,13 +5242,12 @@ RESPOND WITH:
               }
             }
 
-            // Store in session memory
-            this.memory.setEntity(
-              resolved?.displaySymbol || tickerMatch[0],
-              ajson.data?.profile?.name || resolved?.displaySymbol || tickerMatch[0],
-              ajson.data?.profile,
-              analysisData
-            );
+            // Store in session memory (both the legacy memory and the unified
+            // ConversationContext so follow-ups resolve against ONE topic).
+            const _sym = resolved?.displaySymbol || tickerMatch[0];
+            const _name = ajson.data?.profile?.name || _sym;
+            this.memory.setEntity(_sym, _name, ajson.data?.profile, analysisData);
+            if (window.ConversationContext) ConversationContext.setStock(_sym, _name);
           } else {
             console.warn('[Chat] Analyse failed:', ajson.error?.message);
           }
@@ -6337,6 +6412,16 @@ Max 300 words. Reference specific prices and % changes from the data above. Do n
     renderList(oversold.sort((a,b) => a.val-b.val),   'sc-osl',  'sc-osl-cnt',  'neu');
     renderList(volatile.sort((a,b) => b.val-a.val),   'sc-vol',  'sc-vol-cnt',  'dn');
     renderList(aiPicks,                                'sc-ai',   'sc-ai-cnt',   'up');
+
+    // Persist scanner results so chat follow-ups ("which has the best setup?")
+    // can reference them without re-scanning (Priority 7 — scanner memory).
+    if (window.ConversationContext) {
+      ConversationContext.setScanner({
+        bull: bull.slice(0, 6), bear: bear.slice(0, 6), momentum: momentum.slice(0, 6),
+        oversold: oversold.slice(0, 6), volatile: volatile.slice(0, 6), aiPicks: aiPicks.slice(0, 6),
+        scannedAt: Date.now(),
+      });
+    }
 
     btn.disabled = false; btn.textContent = '⚡ Run AI Scan';
     this.toast(`✅ Scan complete — ${results.length} stocks analysed`);

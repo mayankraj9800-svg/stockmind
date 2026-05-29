@@ -50,6 +50,46 @@ module.exports = function run() {
   test('profile persists via setProfile', () => { CC.clear(); CC.setProfile({ age: 35, riskTolerance: 'moderate' }); eq(CC.lastUserProfile.age, 35); });
   test('setProfile merges (does not wipe)', () => { CC.setProfile({ country: 'US' }); eq(CC.lastUserProfile.age, 35); eq(CC.lastUserProfile.country, 'US'); });
 
+  suite('Context — active-topic isolation (no bleed / wrong-context)');
+  test('portfolio→stock: "which is riskiest?" does NOT bleed to portfolio', () => {
+    CC.clear(); CC.setPortfolio({ holdings: [{ symbol: 'NVDA' }] }); CC.setStock('AAPL', 'Apple');
+    notOk(CC.resolveReference('which one is the riskiest?', { reservedCaps: reserved }).kind === 'portfolio-followup');
+    eq(CC.lastPortfolio, null, 'stale portfolio cleared on topic switch');
+  });
+  test('comparison→portfolio: "which is safer?" does NOT bleed to comparison', () => {
+    CC.clear(); CC.setComparison(['MSFT', 'GOOGL']); CC.setPortfolio({ holdings: [{ symbol: 'V' }] });
+    eq(CC.resolveReference('which holding is safer?').kind, 'portfolio-followup');
+    eq(CC.lastComparison, null);
+  });
+  test('stock→comparison clears single-stock topic', () => {
+    CC.clear(); CC.setStock('TSLA'); CC.setComparison(['TSLA', 'NVDA']);
+    eq(CC.activeTopic, 'comparison');
+  });
+  test('activeTopic reflects most recent action', () => {
+    CC.clear(); CC.setStock('AAPL'); eq(CC.activeTopic, 'stock');
+    CC.setWatchlist({ theme: 'ai', items: [] }); eq(CC.activeTopic, 'watchlist');
+    eq(CC.lastPrimarySymbol, null, 'stock symbol cleared when switching to watchlist');
+  });
+
+  suite('Context — "which …" follow-ups stay on the active stock');
+  test('"which risk concerns you the most?" is a follow-up (not a new search)', () => ok(CC.isFollowUp('which risk concerns you the most?')));
+  test('after stock, "which risk …" resolves to that stock', () => {
+    CC.clear(); CC.setStock('TSLA', 'Tesla');
+    eq(CC.resolveReference('which risk concerns you the most?', { reservedCaps: reserved }).symbol, 'TSLA');
+  });
+  test('portfolio→ "which one should receive additional capital?" stays portfolio (no drift)', () => {
+    CC.clear(); CC.setPortfolio({ holdings: [{ symbol: 'NVDA', weight: 30, riskTier: 5 }] });
+    eq(CC.resolveReference('which one should receive additional capital?').kind, 'portfolio-followup');
+  });
+
+  suite('Context — scanner memory (Priority 7)');
+  CC.clear(); CC.setScanner({ bull: [{ sym: 'AAPL', note: '+2%' }], momentum: [{ sym: 'NVDA', note: 'breakout' }], aiPicks: [{ sym: 'NVDA' }], volatile: [], bear: [] });
+  test('scanner stored + activeTopic=scanner', () => { ok(CC.lastScanner); eq(CC.activeTopic, 'scanner'); });
+  test('"which has the best setup?" → scanner-followup', () => eq(CC.resolveReference('which has the best setup?', { reservedCaps: reserved }).kind, 'scanner-followup'));
+  test('"which is safest?" → scanner-followup', () => eq(CC.resolveReference('which one is safest?', { reservedCaps: reserved }).kind, 'scanner-followup'));
+  test('new ticker breaks scanner-followup', () => eq(CC.resolveReference('what about TSLA?', { reservedCaps: reserved }).kind, 'none'));
+  test('analyzing a stock clears scanner', () => { CC.setStock('AAPL'); eq(CC.lastScanner, null); });
+
   suite('Context — turns + clear');
   CC.clear();
   for (let i = 0; i < 12; i++) CC.addTurn('user', 'msg ' + i);

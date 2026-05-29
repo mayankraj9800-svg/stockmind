@@ -65,6 +65,7 @@ function loadFrontend() {
 
   const sandbox = {
     window: win,
+    self: win,            // engine UMD resolves root via `self` → attaches to window
     document: doc,
     navigator: win.navigator,
     localStorage: win.localStorage,
@@ -78,6 +79,16 @@ function loadFrontend() {
   sandbox.globalThis = sandbox;
 
   vm.createContext(sandbox);
+
+  // Load the engine modules (conversationContext, portfolioEngine, …) into the
+  // SAME context first, so window.ConversationContext / PortfolioEngine / etc.
+  // exist exactly as they do in the browser.
+  const enginesDir = path.join(__dirname, '..', '..', 'frontend', 'engines');
+  for (const f of ['conversationContext.js', 'portfolioEngine.js', 'watchlistEngine.js', 'indexRouter.js']) {
+    const p = path.join(enginesDir, f);
+    if (fs.existsSync(p)) vm.runInContext(fs.readFileSync(p, 'utf8'), sandbox, { filename: f });
+  }
+
   // Expose APP/CONFIG/ApiClient out of the script's top-level `const` scope.
   const wrapped = best + '\n;globalThis.__APP = (typeof APP!=="undefined")?APP:null;'
                        + 'globalThis.__CONFIG = (typeof CONFIG!=="undefined")?CONFIG:null;'
@@ -85,7 +96,11 @@ function loadFrontend() {
   vm.runInContext(wrapped, sandbox, { filename: 'index.inline.js' });
 
   if (!sandbox.__APP) throw new Error('APP not found after evaluating inline script');
-  return { APP: sandbox.__APP, CONFIG: sandbox.__CONFIG, ApiClient: sandbox.__ApiClient, sandbox };
+  return {
+    APP: sandbox.__APP, CONFIG: sandbox.__CONFIG, ApiClient: sandbox.__ApiClient,
+    ConversationContext: win.ConversationContext, PortfolioEngine: win.PortfolioEngine,
+    WatchlistEngine: win.WatchlistEngine, IndexRouter: win.IndexRouter, sandbox,
+  };
 }
 
 module.exports = { loadFrontend };
