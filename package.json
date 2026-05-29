@@ -1,0 +1,9 @@
+{
+  "name": "stockmind",
+  "version": "1.0.0",
+  "description": "StockMind AI — root test harness",
+  "private": true,
+  "scripts": {
+    "test": "node tests/run_all.js"
+  }
+}

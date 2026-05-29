@@ -1694,6 +1694,12 @@ input, select, textarea, button { max-width: 100%; }
 <div id="toast"></div>
 <div class="alert-notification" id="alertNotif"></div>
 
+<!-- ── StockMind engines (UMD: attach to window; also Node-testable) ── -->
+<script src="engines/conversationContext.js"></script>
+<script src="engines/portfolioEngine.js"></script>
+<script src="engines/watchlistEngine.js"></script>
+<script src="engines/indexRouter.js"></script>
+
 <script>
 // ═══════════════════════════════════════════════════════════════════════════════
 // STOCKMIND AI PRO — FRONTEND v3.0
@@ -2111,6 +2117,7 @@ const APP = {
       this.activeProfile    = profile || null;
       this.lastAnalysisData = analysisData || null;
       this.topicChangedAt   = Date.now();
+      this.activeComparison = null; // switching to a single stock ends any comparison
       // Update memory display in chat sidebar
       const el = document.getElementById('memoryCtx');
       if (el && ticker) {
@@ -2133,16 +2140,41 @@ const APP = {
         /^(what|how|why|is|does|did|has|have|can|will|would|should|when)\b/i,
         /^(and|also|but|so|then|what if|what\'s|what is|what are)\b/i,
       ];
-      const hasNewTicker = /\b[A-Z]{2,5}\b/.test(msg);
-      const hasCompanyName = /\b(apple|microsoft|google|tesla|nvidia|amazon|meta|netflix|amazon)\b/i.test(msg);
+      // BUG FIX: the old test `/\b[A-Z]{2,5}\b/` flagged ANY all-caps run as a
+      // "new ticker", so follow-ups containing BUY/SELL/RSI/PE/ETF/US were
+      // wrongly rejected → context loss. Filter those words out first using the
+      // same reserved/region sets the ticker extractor uses.
+      const capsTokens = (msg.match(/\b[A-Z]{2,5}\b/g) || [])
+        .filter(t => !APP.RESERVED_FINANCE_TERMS.has(t) && !APP.MARKET_REGION_TERMS.has(t));
+      const hasNewTicker = capsTokens.length > 0;
+      const hasCompanyName = /\b(apple|microsoft|google|alphabet|tesla|nvidia|amazon|meta|facebook|netflix|amd|intel)\b/i.test(msg);
       if (hasNewTicker || hasCompanyName) return false;
       return followUpPatterns.some(p => p.test(msg.trim()));
+    },
+
+    // ── COMPARISON CONTEXT ──────────────────────────────────────────────
+    // Preserve the set of compared tickers so follow-ups like "which has a
+    // stronger moat?" don't lose both companies.
+    activeComparison: null, // e.g. ['AAPL','MSFT']
+    setComparison(tickers) {
+      this.activeComparison = Array.isArray(tickers) && tickers.length >= 2 ? [...tickers] : null;
+      this.topicChangedAt = Date.now();
+    },
+    // True when there is an active comparison and the msg is a comparative
+    // follow-up that introduces no NEW tickers/company names.
+    isComparisonFollowUp(msg) {
+      if (!this.activeComparison) return false;
+      const capsTokens = (msg.match(/\b[A-Z]{2,5}\b/g) || [])
+        .filter(t => !APP.RESERVED_FINANCE_TERMS.has(t) && !APP.MARKET_REGION_TERMS.has(t));
+      if (capsTokens.length > 0) return false; // a new explicit ticker → not a follow-up
+      return /\b(which|stronger|weaker|safer|riskier|better|worse|moat|cheaper|both|them|the (former|latter)|first one|second one)\b/i.test(msg);
     },
 
     clear() {
       this.activeTicker = null; this.activeEntity = null;
       this.activeProfile = null; this.lastAnalysisData = null;
       this.conversationTurns = []; this.topicChangedAt = 0;
+      this.activeComparison = null;
     },
   },
 
@@ -3553,6 +3585,7 @@ Max 250 words. Only reference the positions and data listed above.`;
     'OHLCV','OHLC','HLC','HL','LH',
     // General finance
     'BULL','BEAR','LONG','SHORT','CALL','PUT','SWAP','BOND','NOTE',
+    'SELL','HOLD','MOAT','RISK','RISKS','SAFE','SAFER','SAFEST','BETTER','WORSE',
     // Exchanges/indexes (not tickers)
     'NYSE','NASDAQ','AMEX','LSE','TSX','ASX','SGX','HKEX',
     'NIFTY','SENSEX','BSE','NSE','MCX','SEBI','RBI','IRDAI',
@@ -3876,8 +3909,21 @@ Max 250 words. Only reference the positions and data listed above.`;
     const stripped = t.includes(':') ? t.split(':').pop() : t;
 
     // ── 2. Has a reliable US ADR / US listing ─────────────────────────
+    // CRITICAL: _ADR_MAP entries use keys `api`/`tv`. The rest of the app reads
+    // `apiSymbol`/`tradingviewSymbol`. Spreading raw left those undefined for
+    // EVERY ADR/international stock (TOYOTA, INFOSYS, BP, ASML, BABA…), so their
+    // quotes hit /quote/undefined and TradingView charts broke. Map keys here.
     if (this._ADR_MAP[stripped]) {
-      return { ...this._ADR_MAP[stripped], displaySymbol: stripped, provider: 'Finnhub' };
+      const a = this._ADR_MAP[stripped];
+      return {
+        apiSymbol:         a.api,
+        tradingviewSymbol: a.tv,
+        exchange:          a.exchange,
+        note:              a.note || null,
+        nsFallback:        a.nsFallback || null,
+        displaySymbol:     stripped,
+        provider:          'Finnhub',
+      };
     }
 
     // ── 3. Pure NSE stock — use .NS suffix ────────────────────────────
@@ -3930,6 +3976,26 @@ Max 250 words. Only reference the positions and data listed above.`;
   // ── INTENT CLASSIFICATION ENGINE v2 (QA-validated, 23 test cases) ──
   // Validated logic: region words (US/UK/India) are excluded from ticker
   // detection before deciding scanner vs single-stock mode.
+  // Detect spot-crypto queries so we never silently map them to a stock/ETF.
+  // Returns { name, etf, etf2 } or null. Word-boundary matched to avoid false
+  // positives (e.g. "SOL" inside "SOLAR", "ETH" inside "ETHAN").
+  _detectCrypto(msg) {
+    const m = ' ' + msg.toLowerCase() + ' ';
+    const coins = [
+      { re: /\b(bitcoin|btc)\b/,            name: 'Bitcoin',  etf: 'IBIT', etf2: 'FBTC' },
+      { re: /\b(ethereum|ether|eth)\b/,     name: 'Ethereum', etf: 'ETHA', etf2: 'FETH' },
+      { re: /\b(solana|sol)\b/,             name: 'Solana',   etf: '',     etf2: '' },
+      { re: /\b(dogecoin|doge)\b/,          name: 'Dogecoin', etf: '',     etf2: '' },
+      { re: /\b(cardano|ada)\b/,            name: 'Cardano',  etf: '',     etf2: '' },
+      { re: /\b(ripple|xrp)\b/,             name: 'XRP',      etf: '',     etf2: '' },
+      { re: /\b(binance|bnb)\b/,            name: 'BNB',      etf: '',     etf2: '' },
+    ];
+    for (const c of coins) if (c.re.test(m)) return { name: c.name, etf: c.etf || 'IBIT', etf2: c.etf2 };
+    // Generic "crypto/cryptocurrency" with no stock ticker present
+    if (/\b(crypto|cryptocurrency|altcoin)\b/.test(m)) return { name: 'cryptocurrency', etf: 'IBIT', etf2: '' };
+    return null;
+  },
+
   classifyIntent(msg) {
     const m = msg.toLowerCase().trim();
 
@@ -3949,12 +4015,24 @@ Max 250 words. Only reference the positions and data listed above.`;
     const isMarketWide  = /\b(swing trading stocks?|swing.?trade stocks?|momentum stocks?|oversold stocks?|breakout stocks?|top stocks?|long.?term stocks?|value stocks?|dividend stocks?|growth stocks?)\b/i.test(msg) &&
                           !hasRealTicker;
     const isExplicitScan = /\b(run.*scan|market scan|ai scan|scan.*market)\b/i.test(msg);
-    // Portfolio BUILD requests (suggest stocks for a new portfolio)
-    const isBuildPort = /\b(build|create|construct|make|design)\b/i.test(msg) &&
-                        /\b(portfolio|watchlist)\b/i.test(msg) &&
-                        !/\bmy\b/i.test(msg);
 
-    if (isListRequest || isMarketWide || isExplicitScan || isBuildPort) {
+    // ── WATCHLIST: "create/build a watchlist of AI stocks" ────────────
+    if (/\bwatchlist\b/i.test(msg) && /\b(create|build|make|show|give|generate|of|with|put together)\b/i.test(msg)) {
+      return { mode: 'WATCHLIST' };
+    }
+
+    // Portfolio BUILD requests ("build me a $100k portfolio", "retirement
+    // portfolio", "dividend portfolio"). The app does NOT generate weighted
+    // allocations/income — route to an honest capability response instead of
+    // silently sending the user to the scanner.
+    const isBuildPort = /\b(build|create|construct|make|design|put together|allocate)\b/i.test(msg) &&
+                        /\b(portfolio|allocation|allocations)\b/i.test(msg) &&
+                        !/\bmy\b/i.test(msg);
+    if (isBuildPort) {
+      return { mode: 'PORTFOLIO_BUILD', namedTickers: this.extractTickers(msg, this._getNameMap()).slice(0, 8) };
+    }
+
+    if (isListRequest || isMarketWide || isExplicitScan) {
       let region = 'US';
       if (/\b(india|indian|nse|bse|sensex|nifty)\b/i.test(msg)) region = 'IN';
       if (/\b(uk|ftse|british)\b/i.test(msg)) region = 'UK';
@@ -3966,9 +4044,22 @@ Max 250 words. Only reference the positions and data listed above.`;
       return { mode: 'PORTFOLIO' };
     }
 
-    // ── COMPARE: explicit comparison with real tickers ────────────────
-    if (/\b(compare|vs\.?|versus)\b/i.test(msg) && hasRealTicker) {
-      return { mode: 'COMPARE' };
+    // ── COMPARE: explicit comparison with real tickers OR company names ──
+    // BUG FIX: previously required an UPPERCASE ticker, so "compare nvidia and
+    // amd" (lowercase names) misrouted to SINGLE_STOCK. Also resolve names.
+    if (/\b(compare|vs\.?|versus)\b/i.test(msg)) {
+      const named = this.extractTickers(msg, this._getNameMap());
+      // ≥2 entities = direct compare; OR 1 entity + an active single stock =
+      // "analyse Tata Motors" → "compare to Mahindra" (the active stock is the
+      // other side, injected in the COMPARE handler).
+      if (hasRealTicker || named.length >= 2 || (named.length >= 1 && this.memory.activeTicker))
+        return { mode: 'COMPARE' };
+    }
+
+    // ── COMPARE FOLLOW-UP: "which has a stronger moat?" after a compare ──
+    // Preserves both companies; no new ticker introduced.
+    if (this.memory.isComparisonFollowUp(msg)) {
+      return { mode: 'COMPARE', followUp: true };
     }
 
     // ── SWING: entry/exit/swing keywords on a specific real ticker ────
@@ -3997,16 +4088,28 @@ Max 250 words. Only reference the positions and data listed above.`;
       return true;
     }))];
 
-    // 2. Company name matching (longest match first)
+    // 2. Company name matching (longest match first), WORD-BOUNDED so short
+    // keys don't match inside other words (e.g. "itc" must not match "bitcoin",
+    // "bp" must not match "bps"). Uses non-alphanumeric boundaries.
     const msgLower = msg.toLowerCase();
+    const wordBounded = (name) => {
+      const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp('(^|[^a-z0-9])' + esc + '([^a-z0-9]|$)').test(msgLower);
+    };
     const nameTickers = Object.entries(nameMap)
       .sort(([a],[b]) => b.length - a.length)
-      .filter(([name]) => msgLower.includes(name))
+      .filter(([name]) => wordBounded(name))
       .map(([,ticker]) => ticker)
       .filter(t => t && t !== 'NULL');
 
+    // 2b. Drop raw UPPERCASE tokens that are actually company NAMES (e.g. the
+    // user typed "NVIDIA"): they would otherwise become a phantom ticker
+    // alongside the correct mapped symbol (NVDA). Keep only real symbols.
+    const nameKeys = new Set(Object.keys(nameMap));
+    const cleanedExplicit = explicitTickers.filter(t => !nameKeys.has(t.toLowerCase()));
+
     // 3. Combine, deduplicate, limit
-    return [...new Set([...explicitTickers, ...nameTickers])];
+    return [...new Set([...cleanedExplicit, ...nameTickers])];
   },
 
   // ── SWING TRADING PROMPT BUILDER ──────────────────────────────────
@@ -4046,7 +4149,7 @@ T1: [first target price] | T2: [second target price] | R/R: [ratio]
   },
 
   // ── INSTITUTIONAL COMPARISON PROMPT BUILDER ───────────────────────
-  buildComparePromptV2(stocks) {
+  buildComparePromptV2(stocks, userQuestion) {
     // stocks: [{symbol, quote, profile, metrics, technicals, risk}]
     const f = (v, s='') => v != null && v !== 0 ? `${Number(v).toFixed(2)}${s}` : 'N/A';
     
@@ -4061,8 +4164,11 @@ T1: [first target price] | T2: [second target price] | R/R: [ratio]
     }).join('\n\n');
 
     const symbols = stocks.map(s => s.symbol);
+    const focusLine = userQuestion && userQuestion.trim()
+      ? `\nUSER'S SPECIFIC QUESTION: "${userQuestion.trim()}" — answer it directly in the RELATIVE VERDICT, comparing ${symbols.join(' and ')} only. Do NOT introduce any other company.\n`
+      : '';
     return `You are StockMind AI — institutional equity research analyst. Compare ${symbols.join(' vs ')} using ONLY the verified live data below. Write like an institutional research note, not two separate analyses.
-
+${focusLine}
 VERIFIED LIVE DATA:
 ${dataBlock}
 
@@ -4141,19 +4247,39 @@ RESPOND IN THIS EXACT FORMAT:
       // instead we define a duplicate minimal map here for the intent engine
       // The full map is still used in sendChat for legacy path
       window._SM_NAME_MAP_CACHE = {
+        // ── US Big Tech ──
         apple:'AAPL', microsoft:'MSFT', google:'GOOGL', alphabet:'GOOGL',
-        nvidia:'NVDA', tesla:'TSLA', meta:'META', amazon:'AMZN', amd:'AMD',
+        nvidia:'NVDA', tesla:'TSLA', meta:'META', facebook:'META', amazon:'AMZN', amd:'AMD',
         netflix:'NFLX', intel:'INTC', qualcomm:'QCOM', broadcom:'AVGO',
         paypal:'PYPL', visa:'V', mastercard:'MA', shopify:'SHOP',
         disney:'DIS', spotify:'SPOT', salesforce:'CRM', oracle:'ORCL',
         jpmorgan:'JPM', goldman:'GS', berkshire:'BRK.B', blackrock:'BLK',
         ford:'F', gm:'GM', rivian:'RIVN', boeing:'BA', lockheed:'LMT',
         exxon:'XOM', chevron:'CVX', shell:'SHEL', bp:'BP',
-        pfizer:'PFE', moderna:'MRNA', unitedhealth:'UNH', lilly:'LLY',
-        // Indian
-        reliance:'RELIANCE.NS', tcs:'TCS.NS', infosys:'INFY.NS', wipro:'WIPRO.NS',
-        'hdfc bank':'HDFCBANK.NS', 'icici bank':'ICICIBANK.NS', sbi:'SBIN.NS',
+        // ── US Pharma / Healthcare ──
+        pfizer:'PFE', moderna:'MRNA', unitedhealth:'UNH', lilly:'LLY', 'eli lilly':'LLY',
+        'johnson & johnson':'JNJ', 'johnson and johnson':'JNJ', 'j&j':'JNJ', jnj:'JNJ',
+        merck:'MRK', abbvie:'ABBV', 'novo nordisk':'NVO', novonordisk:'NVO',
+        // ── Semiconductors / Intl tech ──
+        tsmc:'TSM', 'taiwan semiconductor':'TSM', asml:'ASML',
+        samsung:'SSNLF', 'samsung electronics':'SSNLF',
+        toyota:'TM', sony:'SONY', byd:'BYDDF', alibaba:'BABA',
+        // ── ETFs / Indices ──
+        spy:'SPY', qqq:'QQQ', vti:'VTI', schd:'SCHD', voo:'VOO', dia:'DIA',
+        // ── Indian Large Cap (.NS) ──
+        reliance:'RELIANCE.NS', 'reliance industries':'RELIANCE.NS',
+        tcs:'TCS.NS', 'tata consultancy':'TCS.NS',
+        infosys:'INFY.NS', wipro:'WIPRO.NS', 'hcl tech':'HCLTECH.NS',
+        'hdfc bank':'HDFCBANK.NS', hdfcbank:'HDFCBANK.NS', hdfc:'HDFCBANK.NS',
+        'icici bank':'ICICIBANK.NS', icicibank:'ICICIBANK.NS', icici:'ICICIBANK.NS',
+        'axis bank':'AXISBANK.NS', 'kotak bank':'KOTAKBANK.NS', kotak:'KOTAKBANK.NS',
+        sbi:'SBIN.NS', 'state bank':'SBIN.NS',
         'bajaj finance':'BAJFINANCE.NS', titan:'TITAN.NS', zomato:'ZOMATO.NS',
+        'tata motors':'TATAMOTORS.NS', tatamotors:'TATAMOTORS.NS',
+        mahindra:'MM.NS', 'm&m':'MM.NS', 'mahindra & mahindra':'MM.NS', 'mahindra and mahindra':'MM.NS',
+        maruti:'MARUTI.NS', 'bharti airtel':'BHARTIARTL.NS', airtel:'BHARTIARTL.NS',
+        itc:'ITC.NS', 'larsen':'LT.NS', 'l&t':'LT.NS', 'sun pharma':'SUNPHARMA.NS',
+        adani:'ADANIENT.NS', 'adani enterprises':'ADANIENT.NS',
       };
     }
     return window._SM_NAME_MAP_CACHE;
@@ -4211,6 +4337,149 @@ RESPOND IN THIS EXACT FORMAT:
       // Classify intent before any ticker extraction
       const intent = this.classifyIntent(msg);
 
+      // ── CRYPTO GUARD: spot crypto isn't a stock. Never silently substitute
+      // an ETF/stock (the old map turned "bitcoin" into IBIT). Only proceed via
+      // ETF when the user explicitly says "etf". ──────────────────────────────
+      const crypto = this._detectCrypto(msg);
+      if (crypto && !/\betf\b/i.test(msg)) {
+        thinkDiv.remove();
+        const cDiv = document.createElement('div');
+        cDiv.className = 'msg ai';
+        cDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">
+          <div class="ai-section sec-summary"><div class="ai-sec-label">🪙 CRYPTO QUERY</div>
+          <div class="ai-sec-body">StockMind analyses <strong>stocks &amp; ETFs</strong>, not spot crypto, so I won't show a price for <strong>${this._escapeHtml(crypto.name)}</strong> (doing so would mean substituting an unrelated ticker — which I won't fake).<br><br>
+          If you want regulated exposure, ask me to analyse a crypto <strong>ETF</strong>, e.g. <em>"analyse ${crypto.etf} ETF"</em>${crypto.etf2 ? ` or <em>"${crypto.etf2} ETF"</em>` : ''}.</div></div>
+        </div>`;
+        document.getElementById('chatMsgs').appendChild(cDiv);
+        document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+        return;
+      }
+
+      // ── ETF / INDEX ROUTING — never analyse an ETF or index as a company ──
+      const IR = window.IndexRouter;
+      if (IR) {
+        const route = IR.classify(msg);
+        const card = (label, bodyHtml) => {
+          thinkDiv.remove();
+          const d = document.createElement('div'); d.className = 'msg ai';
+          d.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><div class="ai-section sec-summary"><div class="ai-sec-label">${label}</div><div class="ai-sec-body">${bodyHtml}</div></div><div style="margin-top:6px;font-size:9px;color:var(--tx3)">Reference data (not live). Not financial advice.</div></div>`;
+          document.getElementById('chatMsgs').appendChild(d);
+          document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+        };
+
+        // Index comparison ("Nifty 50 vs Sensex vs Nifty Next 50")
+        if (route.kind === 'index-compare') {
+          const rows = route.indices.map(i => `<tr><td style="padding:2px 10px 2px 0"><strong>${this._escapeHtml(i.name)}</strong></td><td style="padding:2px 10px 2px 0">${i.region}</td><td style="padding:2px 10px 2px 0">${i.proxyETF ? this._escapeHtml(i.proxyETF) : '—'}</td><td>${this._escapeHtml(i.desc)}</td></tr>`).join('');
+          card('📊 INDEX COMPARISON', `<table style="font-size:11px;border-collapse:collapse"><tr style="color:var(--tx3)"><td style="padding-right:10px">Index</td><td style="padding-right:10px">Region</td><td style="padding-right:10px">Proxy ETF</td><td>Coverage</td></tr>${rows}</table><br>These are <strong>market indices</strong>, compared by coverage/region — not company fundamentals. Invest via the tracking ETF (proxy) shown.`);
+          return;
+        }
+        // Single index ("how is the Nasdaq 100 doing")
+        if (route.kind === 'index' && intent.mode !== 'COMPARE') {
+          const i = route.index;
+          card(`📈 INDEX: ${this._escapeHtml(i.name)}`, `Region: <strong>${i.region}</strong> · Coverage: ${this._escapeHtml(i.desc)}<br>Investable proxy ETF: <strong>${i.proxyETF ? this._escapeHtml(i.proxyETF) : 'none listed (tracked descriptively)'}</strong>.<br><br>An index is not a company — ask me to analyse its proxy ETF${i.proxyETF ? ` (e.g. "analyse ${i.proxyETF}")` : ''} for holdings & risk.`);
+          if (window.ConversationContext && i.proxyETF) ConversationContext.setETF(i.proxyETF);
+          return;
+        }
+        // ETF comparison (every compared ticker is an ETF) — use registry, not company P/E
+        if (intent.mode === 'COMPARE') {
+          const cmp = this.extractTickers(msg, this._getNameMap());
+          if (cmp.length >= 2 && cmp.every(t => IR.isETF(t))) {
+            const rows = cmp.map(t => { const e = IR.getETF(t); return `<tr><td style="padding:2px 10px 2px 0"><strong>${e.symbol}</strong></td><td style="padding:2px 10px 2px 0">${e.expenseRatio}%</td><td style="padding:2px 10px 2px 0">${e.yield}%</td><td style="padding:2px 10px 2px 0">${this._escapeHtml(e.risk)}</td><td>${this._escapeHtml(e.tracks)}</td></tr>`; }).join('');
+            card('📊 ETF COMPARISON', `<table style="font-size:11px;border-collapse:collapse"><tr style="color:var(--tx3)"><td style="padding-right:10px">ETF</td><td style="padding-right:10px">Expense</td><td style="padding-right:10px">Yield</td><td style="padding-right:10px">Risk</td><td>Tracks</td></tr>${rows}</table><br>Compared as funds (expense ratio · yield · risk · index) — ETFs have no company P/E or moat.`);
+            if (window.ConversationContext) ConversationContext.setComparison(cmp);
+            return;
+          }
+        }
+        // Single ETF ("analyse SPY")
+        if (route.kind === 'etf' && intent.mode !== 'COMPARE') {
+          const e = route.etf;
+          card(`📦 ETF: ${e.symbol} — ${this._escapeHtml(e.name)}`, `Tracks: <strong>${this._escapeHtml(e.tracks)}</strong><br>Expense ratio: <strong>${e.expenseRatio}%</strong> · Yield: <strong>${e.yield}%</strong> · Risk: <strong>${this._escapeHtml(e.risk)}</strong><br>Top sectors: ${e.topSectors.map(s => this._escapeHtml(s)).join(' · ')}<br><br>This is a <strong>fund</strong>, not a company — no single P/E, EPS or moat. It holds a diversified basket tracking ${this._escapeHtml(e.tracks)}.`);
+          if (window.ConversationContext) ConversationContext.setETF(e.symbol);
+          return;
+        }
+      }
+
+      // ── WATCHLIST: curated thematic watchlist via WatchlistEngine ──
+      if (intent.mode === 'WATCHLIST' && window.WatchlistEngine) {
+        thinkDiv.remove();
+        const theme = window.WatchlistEngine.detectTheme(msg);
+        let region = null;
+        if (/\bindia|indian|nse\b/i.test(msg)) region = 'India';
+        else if (/\binternational|global\b/i.test(msg) && !/\bus\b/i.test(msg)) region = null; // mixed
+        const wl = theme ? window.WatchlistEngine.build(theme, { region, limit: 10 }) : null;
+        const d = document.createElement('div'); d.className = 'msg ai';
+        if (!wl) {
+          d.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><div class="ai-section sec-summary"><div class="ai-sec-label">📋 WATCHLIST</div><div class="ai-sec-body">Tell me a theme — AI, cybersecurity, cloud, semiconductors, dividend, Indian, or global growth — e.g. "create a watchlist of AI stocks".</div></div></div>`;
+        } else {
+          if (window.ConversationContext) ConversationContext.setWatchlist(wl);
+          const rows = wl.items.map(i => `<tr><td style="padding:2px 10px 2px 0"><strong>${this._escapeHtml(i.ticker)}</strong></td><td style="padding:2px 10px 2px 0">${this._escapeHtml(i.company)}</td><td style="padding:2px 10px 2px 0">${this._escapeHtml(i.sector)}</td><td style="padding:2px 10px 2px 0">${this._escapeHtml(i.region)}</td><td>${this._escapeHtml(i.reason)}</td></tr>`).join('');
+          d.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><div class="ai-section sec-summary"><div class="ai-sec-label">📋 ${this._escapeHtml(wl.theme.toUpperCase())} WATCHLIST (${wl.count})</div><div class="ai-sec-body"><table style="font-size:11px;border-collapse:collapse"><tr style="color:var(--tx3)"><td style="padding-right:10px">Ticker</td><td style="padding-right:10px">Company</td><td style="padding-right:10px">Sector</td><td style="padding-right:10px">Region</td><td>Why included</td></tr>${rows}</table><br>Ask me to <strong>analyse</strong> or <strong>compare</strong> any of these for live data.</div></div><div style="margin-top:6px;font-size:9px;color:var(--tx3)">${this._escapeHtml(wl.disclaimer)}</div></div>`;
+        }
+        document.getElementById('chatMsgs').appendChild(d);
+        document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+        return;
+      }
+
+      // ── PORTFOLIO_BUILD: build a real rule-based allocation via PortfolioEngine ──
+      if (intent.mode === 'PORTFOLIO_BUILD' && window.PortfolioEngine) {
+        thinkDiv.remove();
+        const profile = (window.ConversationContext ? ConversationContext.extractProfile(msg) : {});
+        if (window.ConversationContext) ConversationContext.setProfile(profile);
+        const amount = this._parseAmount(msg);
+        const themes = [];
+        if (/\bai\b|artificial intel/i.test(msg)) themes.push('ai');
+        if (/cloud|cyber|semic|tech/i.test(msg)) themes.push('technology');
+        if (/global|international/i.test(msg)) themes.push('global');
+        const p = window.PortfolioEngine.build({
+          amount, age: profile.age, riskTolerance: profile.riskTolerance,
+          income: profile.income, themes, country: profile.country || 'US',
+        });
+        if (window.ConversationContext) ConversationContext.setPortfolio(p);
+        const pDiv = document.createElement('div');
+        pDiv.className = 'msg ai';
+        pDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">${this._renderPortfolio(p, 'Suggested ' + p.type + ' portfolio')}</div>`;
+        document.getElementById('chatMsgs').appendChild(pDiv);
+        document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+        return;
+      }
+
+      // ── PORTFOLIO / WATCHLIST FOLLOW-UPS (via ConversationContext) ──
+      if (window.ConversationContext) {
+        const ref = ConversationContext.resolveReference(msg, { reservedCaps: t => this.RESERVED_FINANCE_TERMS.has(t) || this.MARKET_REGION_TERMS.has(t) });
+        if (ref.kind === 'portfolio-followup' && window.PortfolioEngine) {
+          thinkDiv.remove();
+          const p = ref.portfolio;
+          let html;
+          if (/replace|safer alternative|swap/i.test(msg)) {
+            const np = window.PortfolioEngine.replaceRiskiest(p);
+            ConversationContext.setPortfolio(np);
+            html = `<div class="ai-section sec-verdict"><div class="ai-sec-label">🔁 SAFER PORTFOLIO</div><div class="ai-sec-body">Replaced riskiest holding <strong>${this._escapeHtml(np.removed)}</strong> with <strong>${this._escapeHtml(np.added)}</strong>. Risk score ${p.riskScore} → <strong>${np.riskScore}</strong> (−${np.riskReduction}).</div></div>` + this._renderPortfolio(np, 'Rebalanced portfolio');
+          } else if (/riskiest|most risk|highest risk/i.test(msg)) {
+            const w = window.PortfolioEngine.riskiestHolding(p);
+            html = `<div class="ai-section sec-risk"><div class="ai-sec-label">🔴 RISKIEST HOLDING</div><div class="ai-sec-body"><strong>${this._escapeHtml(w.symbol)}</strong> (${this._escapeHtml(w.name)}, ${this._escapeHtml(w.sector)}) — risk tier ${w.riskTier}/5 at ${w.weight}% weight. Say "replace it with something safer" to rebalance.</div></div>`;
+          } else if (/income|yield/i.test(msg)) {
+            html = `<div class="ai-section sec-valuation"><div class="ai-sec-label">💰 INCOME</div><div class="ai-sec-body">Estimated yield <strong>${p.expectedYield}%</strong> → ~<strong>${p.currency}${p.annualIncome.toLocaleString()}</strong>/yr on ${p.currency}${p.amount.toLocaleString()}. <em>Reference estimate, not live.</em></div></div>`;
+          } else {
+            html = this._renderPortfolio(p, 'Current portfolio');
+          }
+          const d = document.createElement('div'); d.className = 'msg ai';
+          d.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">${html}</div>`;
+          document.getElementById('chatMsgs').appendChild(d);
+          document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+          return;
+        }
+        if (ref.kind === 'watchlist-followup') {
+          thinkDiv.remove();
+          const items = ref.watchlist.items || [];
+          const rows = items.map(i => `<tr><td style="padding:2px 8px 2px 0"><strong>${this._escapeHtml(i.ticker)}</strong></td><td>${this._escapeHtml(i.company)}</td></tr>`).join('');
+          const d = document.createElement('div'); d.className = 'msg ai';
+          d.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><div class="ai-section sec-summary"><div class="ai-sec-label">📋 FROM YOUR WATCHLIST (${this._escapeHtml(ref.watchlist.theme)})</div><div class="ai-sec-body">Ask me to <strong>analyse</strong> or <strong>compare</strong> any of these for live data — I won't rank them without verified fundamentals.<br><table style="font-size:11px;margin-top:4px">${rows}</table></div></div></div>`;
+          document.getElementById('chatMsgs').appendChild(d);
+          document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+          return;
+        }
+      }
+
       // ── SCANNER mode: never extract tickers ──────────────────────────────
       if (intent.mode === 'SCANNER') {
         setThinkText(`Running ${intent.region} market scanner…`);
@@ -4231,7 +4500,20 @@ RESPOND IN THIS EXACT FORMAT:
 
       // ── COMPARE mode: fetch both stocks and use institutional compare ──────
       if (intent.mode === 'COMPARE') {
-        const cmpTickers = this.extractTickers(msg, this._getNameMap()).slice(0, 3);
+        let cmpTickers = this.extractTickers(msg, this._getNameMap()).slice(0, 3);
+        // Follow-up ("which has a stronger moat?") — reuse the stored pair so
+        // neither company is lost and no random stock is substituted.
+        if (cmpTickers.length < 2 && this.memory.activeComparison?.length >= 2) {
+          cmpTickers = [...this.memory.activeComparison];
+          setThinkText(`Continuing comparison of ${cmpTickers.join(' vs ')}…`);
+        }
+        // "Analyse Tesla" → "compare it with NVIDIA": only NVIDIA is explicit, so
+        // pull the active single stock into the comparison instead of losing it.
+        else if (cmpTickers.length === 1 && this.memory.activeTicker &&
+                 this.memory.activeTicker !== cmpTickers[0]) {
+          cmpTickers = [this.memory.activeTicker, cmpTickers[0]];
+          setThinkText(`Comparing ${cmpTickers.join(' vs ')}…`);
+        }
         if (cmpTickers.length < 2) {
           // Not enough tickers — route to compare tab with helpful note
           this.switchTab('cmp');
@@ -4248,25 +4530,39 @@ RESPOND IN THIS EXACT FORMAT:
         }
         setThinkText(`Fetching live data for ${cmpTickers.join(' vs ')}…`);
         try {
-          const resolvedSyms = cmpTickers.map(t => this.resolveSymbol(t));
-          const apiSyms      = resolvedSyms.map(r => r?.apiSymbol || r);
-          const quotes       = await ApiClient.batchQuotes(apiSyms);
-          const stocksData   = resolvedSyms.map((resolved, i) => {
-            const q = quotes.find(r => r.symbol === apiSyms[i]);
-            const tech = this.computeTechnicals(null, q?.quote);
-            const risk = this.calculateRisk(null, q?.quote, tech);
-            return { symbol: resolved?.displaySymbol || apiSyms[i], quote: q?.quote || {}, profile: null, metrics: null, technicals: tech, risk };
-          });
-          const cmpPrompt = this.buildComparePromptV2(stocksData);
+          // Fetch FULL data per ticker (quote+profile+metrics via /analyse,
+          // Yahoo-fallback quote for .NS/intl, candles for real RSI/MACD) so
+          // "which has better margins/valuation/asset quality?" can be answered
+          // instead of returning N/A for everything.
+          const stocksData = await Promise.all(cmpTickers.map(async (t) => {
+            const resolved = this.resolveSymbol(t);
+            const sym = resolved?.apiSymbol || t;
+            const [analysis, fallback, candles] = await Promise.all([
+              ApiClient._get(`/analyse/${encodeURIComponent(sym)}`).catch(() => null),
+              ApiClient.quoteWithFallback(resolved),
+              ApiClient.candlesWithFallback(resolved, 120).catch(() => null),
+            ]);
+            const quote   = (fallback?.quote?.c ? fallback.quote : analysis?.quote) || {};
+            const metrics = analysis?.metrics || null;
+            const profile = analysis?.profile || null;
+            const tech    = this.computeTechnicals(metrics, quote, candles);
+            const risk    = this.calculateRisk(metrics, quote, tech);
+            return { symbol: resolved?.displaySymbol || sym, quote, profile, metrics, technicals: tech, risk };
+          }));
+          const cmpPrompt = this.buildComparePromptV2(stocksData, intent.followUp ? msg : '');
           setThinkText('Running institutional comparison…');
           const result = await this.callGroqAI(cmpPrompt);
           if (thinkDiv.isConnected) thinkDiv.remove();
           const aiDiv = document.createElement('div');
           aiDiv.className = 'msg ai';
-          aiDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">${this.formatAIResponse(result)}<div style="margin-top:8px;font-size:9px;color:var(--tx3)">⚠ Live price comparison only · Not financial advice</div></div>`;
+          aiDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">${this.formatAIResponse(result)}<div style="margin-top:8px;font-size:9px;color:var(--tx3)">⚠ Live data comparison · Not financial advice</div></div>`;
           document.getElementById('chatMsgs').appendChild(aiDiv);
           document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
           this.saveToHistory(`Compare: ${cmpTickers.join(' vs ')}`, result, null);
+          // Preserve both tickers so the NEXT message ("which is safer?") keeps
+          // the comparison context instead of losing a company.
+          this.memory.setComparison(cmpTickers);
+          this.memory.activeTicker = null; // a comparison is active, not a single stock
         } catch(e) {
           if (thinkDiv.isConnected) thinkDiv.remove();
           const errDiv = document.createElement('div');
@@ -4332,9 +4628,9 @@ RESPOND WITH:
 
         // ── Social / Comms ────────────────────────────────────────────────
         snap:'SNAP', snapchat:'SNAP', twitter:'TWTR', x:'TWTR',
-        pinterest:'PINS', reddit:'RDDT', discord:'MSFT',
+        pinterest:'PINS', reddit:'RDDT', discord:'', // Discord is private — not Microsoft
         linkedin:'MSFT', whatsapp:'META', instagram:'META', youtube:'GOOGL',
-        tiktok:'BDNCE', twitch:'AMZN', telegram:'', signal:'',
+        tiktok:'', twitch:'AMZN', telegram:'', signal:'', // TikTok/ByteDance is private
 
         // ── Payments / Fintech ────────────────────────────────────────────
         paypal:'PYPL', visa:'V', mastercard:'MA', square:'SQ', block:'SQ',
@@ -4574,7 +4870,10 @@ RESPOND WITH:
         'xlf':'XLF','xlv':'XLV','xlb':'XLB','xli':'XLI',
         'xly':'XLY','xlp':'XLP','xlre':'XLRE','xlu':'XLU',
         'soxl':'SOXL','tqqq':'TQQQ','sqqq':'SQQQ','spxl':'SPXL',
-        'gold etf':'GLD','bitcoin etf':'IBIT','bitcoin':'IBIT',
+        'gold etf':'GLD','bitcoin etf':'IBIT','ethereum etf':'ETHA',
+        // NOTE: spot crypto (bitcoin/ethereum/solana) is intentionally NOT
+        // mapped to a stock/ETF here — see the crypto guard in sendChat. Mapping
+        // "bitcoin" → IBIT silently showed an ETF's price as if it were BTC.
 
         // ── US Mega Cap (additions) ───────────────────────────────────
         'arm':'ARM','arm holdings':'ARM',
@@ -5060,6 +5359,47 @@ RESPOND WITH:
       .replace(/'/g, '&#39;');
   },
 
+  // Parse an investment amount from free text. Handles "$100,000", "₹10,00,000"
+  // (Indian lakh grouping), "75k", "₹50,00,000". Returns a number (0 if none).
+  _parseAmount(msg) {
+    const m = (msg || '').replace(/,/g, '');
+    let mt = m.match(/[$₹]\s*([0-9]+(?:\.[0-9]+)?)\s*(k|m|cr|crore|lakh|lac)?/i)
+          || m.match(/\b([0-9]{4,})\b/);
+    if (!mt) return 0;
+    let n = parseFloat(mt[1]); const unit = (mt[2] || '').toLowerCase();
+    if (unit === 'k') n *= 1e3; else if (unit === 'm') n *= 1e6;
+    else if (unit === 'cr' || unit === 'crore') n *= 1e7;
+    else if (unit === 'lakh' || unit === 'lac') n *= 1e5;
+    return Math.round(n) || 0;
+  },
+
+  // Render a PortfolioEngine result as a labelled card (allocations, risk,
+  // yield, sectors, recession). Pure presentation of engine output.
+  _renderPortfolio(p, title) {
+    const cur = p.currency || '$';
+    const rows = p.holdings.map(h =>
+      `<tr><td style="padding:2px 10px 2px 0"><strong>${this._escapeHtml(h.symbol)}</strong></td>`
+      + `<td style="padding:2px 10px 2px 0">${h.weight}%</td>`
+      + `<td style="padding:2px 10px 2px 0">${cur}${(h.amount||0).toLocaleString()}</td>`
+      + `<td style="padding:2px 10px 2px 0">${this._escapeHtml(h.sector)}</td>`
+      + `<td>${'▰'.repeat(h.riskTier)}${'▱'.repeat(5-h.riskTier)}</td></tr>`).join('');
+    const sectors = Object.entries(p.sectorExposure).sort((a,b)=>b[1]-a[1])
+      .map(([s,w]) => `${this._escapeHtml(s)} ${w}%`).join(' · ');
+    return `<div class="ai-section sec-summary"><div class="ai-sec-label">📁 ${this._escapeHtml(title)} · ${cur}${(p.amount||0).toLocaleString()}</div>
+      <div class="ai-sec-body">
+      <table style="font-size:11px;border-collapse:collapse;width:100%">
+        <tr style="color:var(--tx3)"><td style="padding-right:10px">Ticker</td><td>Weight</td><td>Amount</td><td>Sector</td><td>Risk</td></tr>
+        ${rows}
+        <tr style="border-top:1px solid var(--border);font-weight:700"><td>Total</td><td>${p.totalWeight}%</td><td>${cur}${(p.amount||0).toLocaleString()}</td><td></td><td></td></tr>
+      </table>
+      <div style="margin-top:8px;font-size:10px;line-height:1.7">
+        <strong>Risk:</strong> ${p.riskLabel} (${p.riskScore}/100) &nbsp;·&nbsp; <strong>Est. yield:</strong> ${p.expectedYield}% (~${cur}${(p.annualIncome||0).toLocaleString()}/yr)<br>
+        <strong>Sectors:</strong> ${sectors}<br>
+        <strong>Recession:</strong> ${this._escapeHtml(p.recession || '')}
+      </div></div></div>
+      <div style="margin-top:6px;font-size:9px;color:var(--tx3)">${this._escapeHtml(p.disclaimer || 'Rule-based model. Not financial advice.')}</div>`;
+  },
+
   formatAIResponse(text) {
     if (!text) return '';
     // SECURITY: escape first — AI responses may echo prompt-injected HTML from
@@ -5541,10 +5881,27 @@ Do NOT guess any prices, metrics, or financial data. Keep response under 50 word
       `Beta=${f(metrics?.beta)}`,
     ].filter(Boolean).join(' | ');
 
-    // Valuation block — richer with fwd P/E and PEG
-    const valuationLine = metrics && Object.keys(metrics).length > 3
-      ? `P/E(TTM)=${f(metrics.peTTM)}x | FwdP/E=${fwdPE ? f(fwdPE)+'x' : 'N/A'} | PEG=${peg ? f(peg) : 'N/A'} | EPS=$${f(metrics.epsTTM)} | RevGrowth=${f(metrics['revenueGrowthTTMYoy'],'%')} | EarningsGrowth=${egr ? f(egr,'%') : 'N/A'} | GrossMargin=${f(metrics.grossMarginTTM,'%')} | ROE=${f(metrics.roeTTM,'%')} | ${targetStr}`
-      : 'VALUATION: Metrics unavailable — do not fabricate any ratios';
+    // ── STRICT FUNDAMENTAL VALIDATION (server-verified) ───────────────────
+    // Only metrics the backend validated against the raw Finnhub response are
+    // shown. Missing ones are listed explicitly and the model is forbidden from
+    // discussing/estimating them. No fundamental is ever inferred or derived.
+    const validated = analysisData.validatedMetrics || null;   // {label: number}
+    const missing   = analysisData.missingMetrics || [];
+    const canFund   = analysisData.canAnalyseFundamentals !== false && validated && Object.keys(validated).length >= 3;
+
+    let valuationLine, blockedDirective = '';
+    if (validated && Object.keys(validated).length) {
+      const parts = Object.entries(validated).map(([label, val]) => `${label}=${Number(val).toFixed(2)}`);
+      valuationLine = parts.join(' | ') + (targetStr ? ` | ${targetStr}` : '');
+    } else {
+      valuationLine = 'VALUATION: No verified fundamentals available — do not fabricate, estimate, or infer any ratios.';
+    }
+    if (missing.length) {
+      blockedDirective = `\n⛔ UNAVAILABLE FUNDAMENTALS (DO NOT mention, estimate, infer, or discuss these — say "not available" if asked): ${missing.join(', ')}`;
+    }
+    if (!canFund) {
+      blockedDirective += `\n⛔ INSUFFICIENT VERIFIED FUNDAMENTALS — this is a PRICE/TECHNICAL-ONLY analysis. Do NOT give a fundamental BUY/SELL verdict; explicitly state fundamentals were unavailable for ${symbol}.`;
+    }
 
     // Swing trading mode — use isolated swing prompt, not generic analysis.
     // Reuse the candles already fetched above (unified Yahoo/TwelveData provider)
@@ -5582,7 +5939,7 @@ LIVE PRICE (${quote._meta?.freshness || 'recent'}): $${quote.c?.toFixed(2)} | Ch
 
 ${profile ? `COMPANY: ${profile.name} | Sector: ${profile.finnhubIndustry || 'N/A'} | Exchange: ${profile.exchange || 'N/A'} | Market Cap: ${profile.marketCapitalization ? '$' + (profile.marketCapitalization/1000).toFixed(1) + 'B' : 'N/A'}` : 'COMPANY: Profile unavailable — do not fabricate'}
 
-VALUATION: ${valuationLine}
+VALUATION: ${valuationLine}${blockedDirective}
 
 TECHNICALS: ${techLine}
 
@@ -5620,7 +5977,8 @@ ${verdictRule}
 ═══════════════════════════════════════
 
 DATA RULES (non-negotiable):
-- Only use data in this prompt. Never invent, estimate, or recall training data for prices/metrics.
+- Only use data in this prompt. Never invent, estimate, derive, infer, approximate, or recall training data for prices/metrics.
+- NEVER mention or estimate any metric listed under "UNAVAILABLE FUNDAMENTALS". If asked about one, reply exactly that it was not available.
 - If a section's data is N/A, write "Insufficient verified data for this section."
 - Comparative analysis requires verified data for ALL compared entities.
 - Max 280 words total.

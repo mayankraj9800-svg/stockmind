@@ -114,7 +114,46 @@ router.get('/analyse/:symbol', async (req, res) => {
   try {
     const data       = await finnhub.getFullAnalysisData(req.finnhubKey, req.params.symbol);
     const confidence = aiEngine.calculateConfidence(data);
-    return ok(res, { ...data, confidence });
+
+    // ── STRICT FUNDAMENTAL VALIDATION ──────────────────────────────────────
+    // Only validated fundamentals are exposed; missing ones are blocked +
+    // logged so the LLM can never discuss/estimate them.
+    const validator = require('../services/metricsValidator');
+    const v = validator.validateMetrics(data.metrics, { symbol: data.symbol, profile: data.profile });
+    validator.logBlocked(logger, data.symbol, v.missing);
+
+    return ok(res, {
+      ...data,
+      confidence,
+      validatedMetrics:        v.validated,            // {label: number} — safe to display
+      missingMetrics:          v.missing,              // [label] — never discuss/estimate
+      coverage:                v.coverage,             // [{label,key,status,value}]
+      canAnalyseFundamentals:  v.canAnalyseFundamentals,
+      coverageSummary:         { available: v.availableCount, total: v.totalCount },
+    });
+  } catch (e) {
+    return err(res, e.message, e.status || 502);
+  }
+});
+
+// ── PROVIDER COVERAGE REPORT (per symbol) ─────────────────────────────────────
+// GET /api/coverage/:symbol — validates provider coverage of required fields.
+router.get('/coverage/:symbol', async (req, res) => {
+  try {
+    const validator = require('../services/metricsValidator');
+    const metrics = await finnhub.getMetrics(req.finnhubKey, req.params.symbol);
+    let profile = null;
+    try { profile = await finnhub.getProfile(req.finnhubKey, req.params.symbol); } catch (_) {}
+    const v = validator.validateMetrics(metrics, { symbol: req.params.symbol, profile });
+    validator.logBlocked(logger, req.params.symbol, v.missing);
+    return ok(res, {
+      symbol: req.params.symbol,
+      coverage: v.coverage,
+      report: validator.formatCoverageReport(req.params.symbol, v.coverage),
+      available: v.availableCount,
+      total: v.totalCount,
+      canAnalyseFundamentals: v.canAnalyseFundamentals,
+    });
   } catch (e) {
     return err(res, e.message, e.status || 502);
   }
