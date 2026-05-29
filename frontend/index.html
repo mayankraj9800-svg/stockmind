@@ -1712,13 +1712,68 @@ const CONFIG = {
   HEALTH_CHECK_MS:   60_000,
   MAX_RETRIES:       2,
   RETRY_DELAY_MS:    1_000,
+  PROVIDER_COOLDOWN_MS: 60_000, // skip a candle provider for 60s after it fails
 };
+// All AI calls are proxied through the backend (avoids CORS + keeps the URL
+// defined). Never call Groq with an undefined URL — that produced "/undefined".
+CONFIG.GROQ_PROXY_URL = `${CONFIG.BACKEND_URL}/groq`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STRUCTURED LOGGER — every event identifies provider / ticker / endpoint / reason
+// ─────────────────────────────────────────────────────────────────────────────
+const Log = {
+  _emit(level, event, ctx) {
+    const fn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
+    fn(`[StockMind:${event}]`, ctx || {});
+  },
+  candleFailure(ctx)        { this._emit('warn',  'CANDLE_FETCH_FAILED', ctx); },
+  providerSwitch(ctx)       { this._emit('log',   'PROVIDER_SWITCH', ctx); },
+  groqFailure(ctx)          { this._emit('error', 'GROQ_FAILED', ctx); },
+  normalizationFailure(ctx) { this._emit('warn',  'NORMALIZATION_FAILED', ctx); },
+  chartFailure(ctx)         { this._emit('error', 'CHART_RENDER_FAILED', ctx); },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIG VALIDATION — fail fast & visibly if any required URL is undefined,
+// so no request ever hits "/undefined".
+// ─────────────────────────────────────────────────────────────────────────────
+(function validateConfig() {
+  const problems = [];
+  const isUrl = (v) => typeof v === 'string' && /^https?:\/\/.+/i.test(v);
+  if (!isUrl(CONFIG.BACKEND_URL))    problems.push('BACKEND_URL is not a valid URL');
+  if (!isUrl(CONFIG.GROQ_PROXY_URL)) problems.push('GROQ_PROXY_URL is not a valid URL');
+  if (!CONFIG.GROQ_MODEL)            problems.push('GROQ_MODEL is missing');
+  if (problems.length) {
+    const msg = 'StockMind config error:\n• ' + problems.join('\n• ');
+    console.error(msg);
+    window.addEventListener('DOMContentLoaded', () => {
+      try { document.body.insertAdjacentHTML('afterbegin',
+        `<div style="background:#ff4d6d;color:#fff;padding:10px;font:13px monospace;text-align:center;position:fixed;top:0;left:0;right:0;z-index:99999">⚠ ${msg.replace(/\n/g,' ')}</div>`); } catch(_) {}
+    });
+    throw new Error(msg);
+  }
+})();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API CLIENT — sends user's Finnhub key in x-finnhub-key header per request
 // Backend uses it to call Finnhub but NEVER stores it
 // ─────────────────────────────────────────────────────────────────────────────
 const ApiClient = {
+
+  // ── REQUEST RESILIENCE STATE ───────────────────────────────────────
+  // _inflight: dedupes identical in-flight GETs (same URL → shared promise)
+  // _cooldowns: per-provider cooldown timestamps to stop hammering a provider
+  //             that just failed (candle providers especially).
+  _inflight:  new Map(),
+  _cooldowns: new Map(),
+
+  _providerCoolingDown(provider) {
+    const until = this._cooldowns.get(provider);
+    return until && Date.now() < until;
+  },
+  _coolDownProvider(provider) {
+    this._cooldowns.set(provider, Date.now() + CONFIG.PROVIDER_COOLDOWN_MS);
+  },
 
   /** Get headers including the user's Finnhub key */
   _headers() {
@@ -1728,51 +1783,94 @@ const ApiClient = {
     };
   },
 
-  async _get(path) {
-    const url = `${CONFIG.BACKEND_URL}${path}`;
-    let lastError;
-    for (let attempt = 0; attempt <= CONFIG.MAX_RETRIES; attempt++) {
-      if (attempt > 0) await new Promise(r => setTimeout(r, CONFIG.RETRY_DELAY_MS * attempt));
-      try {
-        const res  = await fetch(url, { method: 'GET', headers: this._headers() });
-        const json = await res.json();
-        if (!json.success) {
-          const e = new Error(json.error?.message || `Backend error ${res.status}`);
-          e.status = res.status;
-          throw e;
-        }
-        return json.data;
-      } catch (e) {
-        lastError = e;
-        if (e.status && e.status >= 400 && e.status < 500) break;
-      }
+  // Exponential backoff with jitter; honours a server Retry-After (seconds).
+  async _backoff(attempt, retryAfterSec) {
+    if (retryAfterSec != null) {
+      await new Promise(r => setTimeout(r, Math.min(retryAfterSec * 1000, 15_000)));
+      return;
     }
-    throw lastError;
+    const base = CONFIG.RETRY_DELAY_MS * Math.pow(2, attempt - 1); // 1s, 2s, 4s…
+    const jitter = Math.random() * 250;
+    await new Promise(r => setTimeout(r, Math.min(base + jitter, 8_000)));
+  },
+
+  async _get(path) {
+    // ── DEDUP: identical concurrent GETs share one network request ──
+    const key = `GET ${path}`;
+    if (this._inflight.has(key)) return this._inflight.get(key);
+
+    const promise = (async () => {
+      const url = `${CONFIG.BACKEND_URL}${path}`;
+      let lastError;
+      for (let attempt = 0; attempt <= CONFIG.MAX_RETRIES; attempt++) {
+        try {
+          const res  = await fetch(url, { method: 'GET', headers: this._headers() });
+          // Respect rate-limit backoff before parsing
+          if (res.status === 429 && attempt < CONFIG.MAX_RETRIES) {
+            const ra = parseInt(res.headers.get('retry-after') || '', 10);
+            await this._backoff(attempt + 1, isNaN(ra) ? null : ra);
+            lastError = Object.assign(new Error('Rate limited (429)'), { status: 429 });
+            continue;
+          }
+          const json = await res.json();
+          if (!json.success) {
+            const e = new Error(json.error?.message || `Backend error ${res.status}`);
+            e.status = res.status;
+            throw e;
+          }
+          return json.data;
+        } catch (e) {
+          lastError = e;
+          if (e.status && e.status >= 400 && e.status < 500 && e.status !== 429) break;
+          if (attempt < CONFIG.MAX_RETRIES) await this._backoff(attempt + 1);
+        }
+      }
+      throw lastError;
+    })();
+
+    this._inflight.set(key, promise);
+    try { return await promise; }
+    finally { this._inflight.delete(key); }
   },
 
   async _post(path, body) {
-    // ── BUG FIX: _post had no retry logic unlike _get; add same retry pattern ──
-    const url = `${CONFIG.BACKEND_URL}${path}`;
-    let lastError;
-    for (let attempt = 0; attempt <= CONFIG.MAX_RETRIES; attempt++) {
-      if (attempt > 0) await new Promise(r => setTimeout(r, CONFIG.RETRY_DELAY_MS * attempt));
-      try {
-        const res  = await fetch(url, {
-          method: 'POST', headers: this._headers(), body: JSON.stringify(body),
-        });
-        const json = await res.json();
-        if (!json.success) {
-          const e = new Error(json.error?.message || `Backend error ${res.status}`);
-          e.status = res.status;
-          throw e;
+    // ── DEDUP: identical concurrent POSTs (same path+body) share one request ──
+    const key = `POST ${path} ${JSON.stringify(body)}`;
+    if (this._inflight.has(key)) return this._inflight.get(key);
+
+    const promise = (async () => {
+      const url = `${CONFIG.BACKEND_URL}${path}`;
+      let lastError;
+      for (let attempt = 0; attempt <= CONFIG.MAX_RETRIES; attempt++) {
+        try {
+          const res  = await fetch(url, {
+            method: 'POST', headers: this._headers(), body: JSON.stringify(body),
+          });
+          if (res.status === 429 && attempt < CONFIG.MAX_RETRIES) {
+            const ra = parseInt(res.headers.get('retry-after') || '', 10);
+            await this._backoff(attempt + 1, isNaN(ra) ? null : ra);
+            lastError = Object.assign(new Error('Rate limited (429)'), { status: 429 });
+            continue;
+          }
+          const json = await res.json();
+          if (!json.success) {
+            const e = new Error(json.error?.message || `Backend error ${res.status}`);
+            e.status = res.status;
+            throw e;
+          }
+          return json.data;
+        } catch(e) {
+          lastError = e;
+          if (e.status && e.status >= 400 && e.status < 500 && e.status !== 429) break; // don't retry hard 4xx
+          if (attempt < CONFIG.MAX_RETRIES) await this._backoff(attempt + 1);
         }
-        return json.data;
-      } catch(e) {
-        lastError = e;
-        if (e.status && e.status >= 400 && e.status < 500) break; // don't retry 4xx
       }
-    }
-    throw lastError;
+      throw lastError;
+    })();
+
+    this._inflight.set(key, promise);
+    try { return await promise; }
+    finally { this._inflight.delete(key); }
   },
 
   async quote(symbol) {
@@ -1785,17 +1883,51 @@ const ApiClient = {
     catch (e) { console.warn(`[ApiClient] Profile failed for ${symbol}:`, e.message); return null; }
   },
 
+  // News routing: Finnhub primary → Yahoo fallback. Always resolves to an
+  // array (never throws) so callers degrade gracefully.
   async news(symbol) {
-    try { return await this._get(`/news/${encodeURIComponent(symbol)}`); }
-    catch (e) { console.warn(`[ApiClient] News failed for ${symbol}:`, e.message); return []; }
+    try {
+      const n = await this._get(`/news/${encodeURIComponent(symbol)}`);
+      if (Array.isArray(n) && n.length) return n;
+      // Finnhub returned nothing — try Yahoo
+    } catch (e) {
+      console.warn(`[ApiClient] Finnhub news failed for ${symbol}:`, e.message);
+    }
+    try {
+      const display = (APP.normalizeTicker?.(symbol)?.displaySymbol) || symbol;
+      const yn = await this._get(`/yahoo-news/${encodeURIComponent(display)}`);
+      if (Array.isArray(yn) && yn.length) {
+        Log.providerSwitch({ from: 'finnhub', to: 'yahoo', ticker: symbol, reason: 'news fallback' });
+        return yn;
+      }
+    } catch (e) {
+      console.warn(`[ApiClient] Yahoo news failed for ${symbol}:`, e.message);
+    }
+    return [];
   },
 
+  // Backend hard-caps each /batch/quotes request at 30 symbols (returns 400
+  // otherwise). Heatmap (~41) and scanner (~110) exceeded this, failing every
+  // quote. Chunk into ≤25 and merge so any list size works.
   async batchQuotes(symbols) {
-    try { return await this._post('/batch/quotes', { symbols }); }
-    catch (e) {
-      console.warn('[ApiClient] Batch quotes failed:', e.message);
-      return symbols.map(s => ({ symbol: s, quote: null, error: e.message }));
+    const MAX = 25; // safety margin under the backend's 30 limit
+    const unique = [...new Set((symbols || []).filter(Boolean))];
+    if (!unique.length) return [];
+
+    const chunks = [];
+    for (let i = 0; i < unique.length; i += MAX) chunks.push(unique.slice(i, i + MAX));
+
+    const results = [];
+    for (const chunk of chunks) {
+      try {
+        const part = await this._post('/batch/quotes', { symbols: chunk });
+        if (Array.isArray(part)) results.push(...part);
+      } catch (e) {
+        console.warn('[ApiClient] Batch quotes chunk failed:', e.message);
+        results.push(...chunk.map(s => ({ symbol: s, quote: null, error: e.message })));
+      }
     }
+    return results;
   },
 
   async health() {
@@ -1808,16 +1940,12 @@ const ApiClient = {
     }
   },
 
-  // Fetch daily candles for RSI/MACD/MA calculations (best-effort, non-blocking)
+  // Fetch daily candles for RSI/MACD/MA calculations (best-effort, non-blocking).
+  // DEPRECATED Finnhub path — kept for back-compat but now delegates to the
+  // unified Yahoo→TwelveData provider so it can never trigger a Finnhub 403.
   async candles(symbol, days = 220) {
-    try {
-      const to   = Math.floor(Date.now() / 1000);
-      const from = to - days * 86400;
-      return await this._get(`/candles/${encodeURIComponent(symbol)}?from=${from}&to=${to}&resolution=D`);
-    } catch (e) {
-      console.warn(`[ApiClient] Candles failed for ${symbol}:`, e.message);
-      return null;
-    }
+    const resolved = (APP.normalizeTicker?.(symbol)) || { apiSymbol: symbol, displaySymbol: symbol, exchange: 'US' };
+    return this.candlesWithFallback(resolved, days);
   },
 
   // ── PROVIDER-AWARE QUOTE WITH FALLBACK ─────────────────────────────
@@ -1869,30 +1997,51 @@ const ApiClient = {
     return { quote: q, symbolUsed: resolved.apiSymbol, providerNote: isEmpty ? '⚠ Limited Finnhub coverage' : note };
   },
 
-  // ── PROVIDER-AWARE CANDLES WITH FALLBACK ───────────────────────────
+  // ── UNIFIED CANDLE PROVIDER (Yahoo primary → TwelveData fallback) ────
+  // Finnhub candles are NEVER used here — the free tier returns 403
+  // ("You don't have access to this resource"). Provider order comes from
+  // APP.resolveProvider(); each provider has a cooldown after failure.
   async candlesWithFallback(resolved, days = 220) {
     if (!resolved) return null;
+    const ticker = resolved.displaySymbol || resolved.apiSymbol;
 
-    // 1. Try Finnhub (best for US stocks)
-    let c = await this.candles(resolved.apiSymbol, days);
-    if (this._validCandles(c)) return c;
-
-    // 2. Try Finnhub with .NS fallback
-    if (resolved.nsFallback) {
-      c = await this.candles(resolved.nsFallback, days);
-      if (this._validCandles(c)) return c;
-    }
-
-    // 3. Try Yahoo Finance via backend proxy (works globally)
-    c = await this.yahooCandles(resolved.apiSymbol, days);
-    if (this._validCandles(c)) return c;
-
-    // 4. For NSE stocks: try explicit .NS suffix on Yahoo
+    // Build the list of Yahoo symbol variants to try (handles NSE/.NS etc.)
+    const yahooSymbols = [resolved.apiSymbol];
     if (resolved.exchange === 'NSE' && !resolved.apiSymbol.endsWith('.NS')) {
-      c = await this.yahooCandles(`${resolved.displaySymbol}.NS`, days);
-      if (this._validCandles(c)) return c;
+      yahooSymbols.push(`${resolved.displaySymbol}.NS`);
     }
 
+    const providers = (APP.resolveProvider?.(resolved)) || ['yahoo', 'twelvedata'];
+
+    for (const provider of providers) {
+      if (this._providerCoolingDown(provider)) {
+        Log.providerSwitch({ from: provider, to: 'next', ticker, reason: 'provider in cooldown' });
+        continue;
+      }
+
+      try {
+        if (provider === 'yahoo') {
+          for (const sym of yahooSymbols) {
+            const c = await this.yahooCandles(sym, days);
+            if (this._validCandles(c)) return c;
+          }
+          Log.candleFailure({ provider: 'yahoo', ticker, endpoint: '/yahoo-candles', reason: 'no valid candles' });
+          this._coolDownProvider('yahoo');
+        } else if (provider === 'twelvedata') {
+          const c = await this.twelveDataCandles(resolved.apiSymbol, days);
+          if (this._validCandles(c)) {
+            Log.providerSwitch({ from: 'yahoo', to: 'twelvedata', ticker, reason: 'yahoo unavailable' });
+            return c;
+          }
+          this._coolDownProvider('twelvedata');
+        }
+      } catch (e) {
+        Log.candleFailure({ provider, ticker, endpoint: 'candlesWithFallback', reason: e.message });
+        this._coolDownProvider(provider);
+      }
+    }
+
+    Log.candleFailure({ provider: 'all', ticker, endpoint: 'candlesWithFallback', reason: 'all providers exhausted' });
     return null;
   },
 
@@ -1905,7 +2054,17 @@ const ApiClient = {
     try {
       return await this._get(`/yahoo-candles/${encodeURIComponent(symbol)}?days=${days}`);
     } catch(e) {
-      console.warn('[ApiClient] Yahoo candles failed for', symbol, ':', e.message);
+      Log.candleFailure({ provider: 'yahoo', ticker: symbol, endpoint: '/yahoo-candles', reason: e.message });
+      return null;
+    }
+  },
+
+  async twelveDataCandles(symbol, days = 220) {
+    try {
+      return await this._get(`/twelvedata-candles/${encodeURIComponent(symbol)}?days=${days}`);
+    } catch(e) {
+      // 503 = TwelveData not configured on backend; treat as unavailable, not fatal.
+      Log.candleFailure({ provider: 'twelvedata', ticker: symbol, endpoint: '/twelvedata-candles', reason: e.message });
       return null;
     }
   },
@@ -2539,41 +2698,83 @@ const APP = {
   },
 
   // ── TRADINGVIEW CHART ─────────────────────────────────────────────────────
+  // Charts must NEVER crash the app. Any failure shows a fallback panel and
+  // logs a structured warning; the rest of the app keeps running.
   loadChart(rawSymbol, tf = '1D') {
-    this.state.currentSymbol = rawSymbol;
     const container = document.getElementById('tv-container');
     if (!container) return;
 
-    // Resolve to TradingView symbol format
-    const resolved  = this.resolveSymbol(rawSymbol);
-    // Fallback: if resolveSymbol returns null, use raw input for TV (best effort)
-    const tvSymbol  = resolved?.tradingviewSymbol || rawSymbol;
-
-    const tfMap = { '1D': 'D', '1W': 'W', '1M': 'M', '3M': '3M', '1Y': '12M', '5Y': '60M' };
-    const tvTf  = tfMap[tf] || 'D';
-
-    // Show brief loading state then render TradingView chart
-    container.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg2);color:var(--tx3);font-size:12px;flex-direction:column;gap:8px"><div class="pw-spinner"></div><span>Loading chart…</span></div>`;
-
-    setTimeout(() => {
+    const renderFallback = (reason) => {
+      Log.chartFailure({ ticker: rawSymbol, endpoint: 'tradingview-widget', reason });
       if (!container.isConnected) return;
-      container.innerHTML = `<iframe
-        src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(tvSymbol)}&interval=${tvTf}&theme=dark&style=1&locale=en&toolbar_bg=%230d1219&enable_publishing=false&hide_top_toolbar=false&hide_legend=false&save_image=false&backgroundColor=%23080c10&gridLineColor=%231e2a38&candleUpColor=%2300d4aa&candleDownColor=%23ff4d6d&borderUpColor=%2300d4aa&borderDownColor=%23ff4d6d&wickUpColor=%2300d4aa&wickDownColor=%23ff4d6d"
-        style="width:100%;height:100%;border:none;"
-        allowtransparency="true"
-        scrolling="no"
-        allowfullscreen
-      ></iframe>`;
-    }, 150);
+      container.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg2);color:var(--tx3);font-size:12px;flex-direction:column;gap:8px;text-align:center;padding:16px">
+        <div style="font-size:22px">📉</div>
+        <strong style="color:var(--tx2)">Chart unavailable for ${(''+rawSymbol).replace(/[<>]/g,'')}</strong>
+        <span>Live price data and AI analysis still work below.</span>
+        <button onclick="APP.loadChart('${(''+rawSymbol).replace(/['"<>]/g,'')}', '${tf}')" style="margin-top:6px;padding:5px 12px;background:var(--s2);color:var(--tx1);border:1px solid var(--border);border-radius:5px;cursor:pointer;font-size:11px">↻ Retry</button>
+      </div>`;
+    };
 
-    // Also update the price widget with API symbol (not TV symbol)
-    if (resolved?.apiSymbol) this.loadPriceWidget(resolved.apiSymbol);
+    try {
+      this.state.currentSymbol = rawSymbol;
+
+      // Normalize first — every request path goes through normalization.
+      const resolved  = this.normalizeTicker(rawSymbol);
+      const tvSymbol  = resolved?.tradingviewSymbol || rawSymbol;
+
+      const tfMap = { '1D': 'D', '1W': 'W', '1M': 'M', '3M': '3M', '1Y': '12M', '5Y': '60M' };
+      const tvTf  = tfMap[tf] || 'D';
+
+      // Show brief loading state then render TradingView chart
+      container.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg2);color:var(--tx3);font-size:12px;flex-direction:column;gap:8px"><div class="pw-spinner"></div><span>Loading chart…</span></div>`;
+
+      setTimeout(() => {
+        try {
+          if (!container.isConnected) return;
+          container.innerHTML = `<iframe
+            src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(tvSymbol)}&interval=${tvTf}&theme=dark&style=1&locale=en&toolbar_bg=%230d1219&enable_publishing=false&hide_top_toolbar=false&hide_legend=false&save_image=false&backgroundColor=%23080c10&gridLineColor=%231e2a38&candleUpColor=%2300d4aa&candleDownColor=%23ff4d6d&borderUpColor=%2300d4aa&borderDownColor=%23ff4d6d&wickUpColor=%2300d4aa&wickDownColor=%23ff4d6d"
+            style="width:100%;height:100%;border:none;"
+            allowtransparency="true"
+            scrolling="no"
+            allowfullscreen
+            onerror="APP._chartIframeError && APP._chartIframeError('${(''+rawSymbol).replace(/['"<>]/g,'')}')"
+          ></iframe>`;
+        } catch (e) { renderFallback(e.message); }
+      }, 150);
+
+      // Also update the price widget with provider symbol (not TV symbol)
+      if (resolved?.providerSymbol) {
+        this.loadPriceWidget(resolved.providerSymbol).catch(e =>
+          Log.chartFailure({ ticker: rawSymbol, endpoint: 'price-widget', reason: e.message }));
+      }
+    } catch (e) {
+      renderFallback(e.message);
+    }
+  },
+
+  // Fallback handler if the TradingView iframe itself fails to load.
+  _chartIframeError(rawSymbol) {
+    const container = document.getElementById('tv-container');
+    Log.chartFailure({ ticker: rawSymbol, endpoint: 'tradingview-iframe', reason: 'iframe load error' });
+    if (container && container.isConnected) {
+      container.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg2);color:var(--tx3);font-size:12px;flex-direction:column;gap:8px;text-align:center;padding:16px">
+        <div style="font-size:22px">📉</div>
+        <strong style="color:var(--tx2)">Chart provider did not respond</strong>
+        <span>Live price data and AI analysis still work below.</span>
+      </div>`;
+    }
   },
 
   // ── PRICE WIDGET (chart sidebar) ─────────────────────────────────────────
   async loadPriceWidget(symbol) {
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     const badge = document.getElementById('pwLiveBadge');
+
+    // ── RACE GUARD: rapid symbol switches (TSLA→NVDA→AMD→AAPL) must not let a
+    // slow earlier response overwrite the latest one. Only the newest request
+    // (matching this._pwSeq) is allowed to render. ──
+    const mySeq = this._pwSeq = (this._pwSeq || 0) + 1;
+    const isStale = () => mySeq !== this._pwSeq;
 
     const resolved = this.resolveSymbol(symbol);
     const fetchSym = resolved?.apiSymbol || symbol;
@@ -2588,6 +2789,9 @@ const APP = {
       ApiClient.quoteWithFallback(resolved),
       ApiClient.profile(fetchSym),
     ]);
+
+    if (isStale()) return; // a newer symbol was requested — discard this response
+
     const quote = fallbackResult?.quote;
     const providerNote = fallbackResult?.providerNote;
 
@@ -2687,7 +2891,7 @@ Max 100 words.`;
     const v = result.includes('BUY') ? 'BUY' : result.includes('SELL') ? 'SELL' : 'HOLD';
     const colors = { BUY: 'var(--gn)', SELL: 'var(--rd)', HOLD: 'var(--am)' };
 
-    body.innerHTML  = result.replace(/\n/g, '<br>');
+    body.innerHTML  = this._escapeHtml(result).replace(/\n/g, '<br>');
     verdict.textContent = v;
     verdict.style.color = colors[v];
     verdict.style.background = v === 'BUY' ? 'rgba(0,212,170,.1)' : v === 'SELL' ? 'rgba(255,77,109,.1)' : 'rgba(255,184,48,.1)';
@@ -3687,7 +3891,41 @@ Max 250 words. Only reference the positions and data listed above.`;
     return { apiSymbol: stripped, tradingviewSymbol: `${tvExchange}:${stripped}`, displaySymbol: stripped, exchange: 'US', provider: 'Finnhub', note: null };
   },
 
+  // ── NORMALIZED TICKER (canonical contract) ─────────────────────────
+  // Every request path should normalize first. Returns the documented shape:
+  //   { displaySymbol, providerSymbol, tradingviewSymbol, exchange }
+  // plus passthrough fields (nsFallback, note) used by the fallback chain.
+  //   RELIANCE → providerSymbol RELIANCE.NS, tradingview NSE:RELIANCE
+  //   AAPL     → providerSymbol AAPL,        tradingview NASDAQ:AAPL
+  normalizeTicker(raw) {
+    const resolved = this.resolveSymbol(raw);
+    if (!resolved) {
+      Log.normalizationFailure({ ticker: raw, reason: 'unresolvable' });
+      return null;
+    }
+    return {
+      displaySymbol:     resolved.displaySymbol,
+      providerSymbol:    resolved.apiSymbol,          // symbol sent to data providers
+      tradingviewSymbol: resolved.tradingviewSymbol,
+      exchange:          resolved.exchange,
+      // passthrough for the provider fallback chain
+      nsFallback:        resolved.nsFallback || null,
+      note:              resolved.note || null,
+      apiSymbol:         resolved.apiSymbol,          // back-compat alias
+    };
+  },
 
+  // ── PROVIDER ROUTING ───────────────────────────────────────────────
+  // Decides the ordered list of candle providers for a resolved symbol.
+  //   US      → Finnhub-region stock, but candles use Yahoo (Finnhub 403s) → ['yahoo','twelvedata']
+  //   India / Europe / Japan / others → Yahoo primary, TwelveData fallback
+  // Finnhub candles are intentionally never in this list (free-tier 403).
+  resolveProvider(resolved) {
+    // Candle providers are Yahoo-first everywhere; TwelveData is the universal
+    // fallback. Region only affects WHICH yahoo symbol variants we try, handled
+    // in candlesWithFallback.
+    return ['yahoo', 'twelvedata'];
+  },
 
   // ── INTENT CLASSIFICATION ENGINE v2 (QA-validated, 23 test cases) ──
   // Validated logic: region words (US/UK/India) are excluded from ticker
@@ -3932,6 +4170,9 @@ RESPOND IN THIS EXACT FORMAT:
     if (sBtn) { sBtn.disabled = true; sBtn.textContent = '…'; }
 
     const msgs = document.getElementById('chatMsgs');
+
+    // Long-session memory: cap DOM growth (300+ messages would bloat memory).
+    this._capChatMessages(msgs);
 
     // Add user message
     const userDiv = document.createElement('div');
@@ -4696,14 +4937,18 @@ RESPOND WITH:
       document.getElementById('groqStatus').textContent = 'thinking…';
       document.getElementById('groqStatus').style.color = 'var(--am)';
 
-      // ── BUG FIX: add 30s timeout to chat Groq fetch ──
+      // ── Route through backend proxy (avoids CORS + never hits "/undefined") ──
+      // Previously this used CONFIG.GROQ_URL which was never defined, producing
+      // fetch("/undefined") → "Groq error 404". The proxy is the single source.
+      if (!APP.groqKey) throw new Error('auth: No Groq key configured');
+
       const chatController = new AbortController();
       const chatGroqTimeout = setTimeout(() => chatController.abort(), 30000);
       let groqRes;
       try {
-        groqRes = await fetch(CONFIG.GROQ_URL, {
+        groqRes = await fetch(CONFIG.GROQ_PROXY_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${APP.groqKey}` },
+          headers: { 'Content-Type': 'application/json', 'x-groq-key': APP.groqKey },
           body: JSON.stringify({
             model: CONFIG.GROQ_MODEL, max_tokens: 800, temperature: 0.2,
             messages: [{ role: 'user', content: prompt }],
@@ -4716,14 +4961,18 @@ RESPOND WITH:
 
       if (!groqRes.ok) {
         const ed = await groqRes.json().catch(() => ({}));
-        throw new Error(ed.error?.message || `Groq error ${groqRes.status}`);
+        const reason = ed.error?.message || `Groq error ${groqRes.status}`;
+        Log.groqFailure({ endpoint: CONFIG.GROQ_PROXY_URL, status: groqRes.status, reason });
+        throw new Error(reason);
       }
 
       document.getElementById('groqStatus').textContent = 'ready';
       document.getElementById('groqStatus').style.color = 'var(--gn)';
 
+      // Backend proxy wraps Groq's payload as { success, data: <groq response> }
       const groqData = await groqRes.json();
-      const result   = groqData.choices?.[0]?.message?.content || 'No response.';
+      const payload  = groqData.data || groqData; // tolerate either shape
+      const result   = payload.choices?.[0]?.message?.content || 'No response.';
 
       // ── STEP 6: Render result ─────────────────────────────────────────────
       thinkDiv.remove();
@@ -4789,8 +5038,33 @@ RESPOND WITH:
   },
 
   // ── AI RESPONSE FORMATTER — Bloomberg section renderer ────────────────────
+  // Keep at most CHAT_MAX message nodes in the DOM. Trims the oldest first so
+  // a 300+ message session stays memory- and render-stable.
+  _capChatMessages(container) {
+    const CHAT_MAX = 120;
+    if (!container) return;
+    const nodes = container.querySelectorAll('.msg');
+    if (nodes.length <= CHAT_MAX) return;
+    for (let i = 0; i < nodes.length - CHAT_MAX; i++) nodes[i].remove();
+  },
+
+  // Escape HTML entities so untrusted content (AI output, echoed news
+  // headlines) can never inject markup. Markdown tags we generate afterwards
+  // are added on top of already-escaped text.
+  _escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  },
+
   formatAIResponse(text) {
     if (!text) return '';
+    // SECURITY: escape first — AI responses may echo prompt-injected HTML from
+    // news headlines. All markdown→HTML below operates on escaped text.
+    text = this._escapeHtml(text);
 
     // Section definitions: emoji prefix → colour class + label
     const sections = [
@@ -5272,11 +5546,13 @@ Do NOT guess any prices, metrics, or financial data. Keep response under 50 word
       ? `P/E(TTM)=${f(metrics.peTTM)}x | FwdP/E=${fwdPE ? f(fwdPE)+'x' : 'N/A'} | PEG=${peg ? f(peg) : 'N/A'} | EPS=$${f(metrics.epsTTM)} | RevGrowth=${f(metrics['revenueGrowthTTMYoy'],'%')} | EarningsGrowth=${egr ? f(egr,'%') : 'N/A'} | GrossMargin=${f(metrics.grossMarginTTM,'%')} | ROE=${f(metrics.roeTTM,'%')} | ${targetStr}`
       : 'VALUATION: Metrics unavailable — do not fabricate any ratios';
 
-    // Swing trading mode — use isolated swing prompt, not generic analysis
+    // Swing trading mode — use isolated swing prompt, not generic analysis.
+    // Reuse the candles already fetched above (unified Yahoo/TwelveData provider)
+    // instead of calling Finnhub candles (free-tier 403).
     if (this.investorMode === 'swing' && analysisData?.quote) {
-      const technicals = this.computeTechnicals(metrics, quote, await ApiClient.candles(symbol, 60).catch(() => null));
-      const risk = this.calculateRisk(metrics, quote, technicals);
-      return this.buildSwingPrompt(symbol, quote, technicals, risk) + `\n\nUSER QUESTION: ${userMessage}`;
+      const swingTech = this.computeTechnicals(metrics, quote, candles);
+      const risk = this.calculateRisk(metrics, quote, swingTech);
+      return this.buildSwingPrompt(symbol, quote, swingTech, risk) + `\n\nUSER QUESTION: ${userMessage}`;
     }
 
     // Investor mode context injection

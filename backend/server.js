@@ -14,6 +14,36 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'null')
   .split(',').map(o => o.trim()).filter(Boolean);
 
+// ── PROVIDER CONFIG ──────────────────────────────────────────────────────────
+// Groq base URL is fixed; never construct it from an undefined env var (which
+// previously produced requests to "/undefined"). API keys for Groq/Finnhub are
+// supplied per-user via request headers, so they are NOT required at startup.
+const GROQ_URL          = process.env.GROQ_URL || 'https://api.groq.com/openai/v1/chat/completions';
+const TWELVEDATA_API_KEY = process.env.TWELVEDATA_API_KEY || '';
+
+// ── STARTUP VALIDATION ───────────────────────────────────────────────────────
+// Fail loudly on genuinely required config; warn (never silently) on optional
+// providers so misconfiguration is always visible in logs.
+function validateStartupConfig() {
+  const fatal = [];
+
+  if (!Number.isInteger(PORT) || PORT <= 0) fatal.push('PORT is invalid');
+  if (!/^https?:\/\/.+/i.test(GROQ_URL))     fatal.push(`GROQ_URL is malformed: "${GROQ_URL}"`);
+  if (!/^https?:\/\/.+/i.test(process.env.FINNHUB_BASE_URL || 'https://finnhub.io/api/v1'))
+    fatal.push('FINNHUB_BASE_URL is malformed');
+
+  if (fatal.length) {
+    throw new Error('Startup config invalid:\n  - ' + fatal.join('\n  - '));
+  }
+
+  if (!TWELVEDATA_API_KEY) {
+    logger.warn('STARTUP: TWELVEDATA_API_KEY not set — TwelveData candle fallback disabled (Yahoo remains primary)');
+  }
+  if (!ALLOWED_ORIGINS.length) {
+    logger.warn('STARTUP: ALLOWED_ORIGINS empty — relying on localhost/netlify allowances only');
+  }
+}
+
 // ── EXPRESS ───────────────────────────────────────────────────────────────────
 const app = express();
 
@@ -120,6 +150,33 @@ function normalizeYahooCandles(data) {
   }
 }
 
+// ── NORMALIZE TWELVEDATA CANDLE RESPONSE ─────────────────────────────────────
+// TwelveData returns newest-first { values: [{ datetime, open, high, low, close, volume }] }.
+// We reverse to oldest-first and convert into the same { s,t,o,h,l,c,v } shape
+// the frontend already understands (Finnhub-compatible).
+function normalizeTwelveDataCandles(data) {
+  try {
+    const values = data?.values;
+    if (!Array.isArray(values) || values.length < 5) return null;
+
+    const rows = [...values].reverse(); // oldest → newest
+    const out = { s: 'ok', t: [], o: [], h: [], l: [], c: [], v: [] };
+    for (const r of rows) {
+      const close = parseFloat(r.close);
+      if (!isFinite(close) || close <= 0) continue;
+      out.t.push(Math.floor(new Date(r.datetime).getTime() / 1000));
+      out.o.push(parseFloat(r.open)  || close);
+      out.h.push(parseFloat(r.high)  || close);
+      out.l.push(parseFloat(r.low)   || close);
+      out.c.push(close);
+      out.v.push(parseFloat(r.volume) || 0);
+    }
+    return out.c.length >= 5 ? out : null;
+  } catch(e) {
+    return null;
+  }
+}
+
 // ── YAHOO CANDLES PROXY ───────────────────────────────────────────────────────
 // GET /api/yahoo-candles/:symbol?days=220
 app.get('/api/yahoo-candles/:symbol', async (req, res) => {
@@ -159,8 +216,49 @@ app.get('/api/yahoo-candles/:symbol', async (req, res) => {
   } catch(e) {
     const status  = e.response?.status || 500;
     const message = `Yahoo candles failed for ${symbol}: ${e.message}`;
-    logger.error(message);
+    logger.candleFailure({ provider: 'yahoo', ticker: symbol, endpoint: '/v8/finance/chart', reason: e.message });
     res.status(status).json({ success: false, error: { message, code: status } });
+  }
+});
+
+// ── TWELVEDATA CANDLES PROXY (fallback when Yahoo fails) ─────────────────────
+// GET /api/twelvedata-candles/:symbol?days=220
+// Requires TWELVEDATA_API_KEY env var. If absent, returns 503 so the frontend
+// can gracefully skip this provider without crashing.
+app.get('/api/twelvedata-candles/:symbol', async (req, res) => {
+  const symbol = req.params.symbol;
+  const days   = parseInt(req.query.days || '220', 10);
+
+  if (!symbol) {
+    return res.status(400).json({ success: false, error: { message: 'Symbol required', code: 400 } });
+  }
+  if (!TWELVEDATA_API_KEY) {
+    logger.candleFailure({ provider: 'twelvedata', ticker: symbol, endpoint: '/time_series', reason: 'TWELVEDATA_API_KEY not configured' });
+    return res.status(503).json({ success: false, error: { message: 'TwelveData not configured', code: 503 } });
+  }
+
+  const cacheKey = `td-candles:${symbol}:${days}`;
+  const cached = getCachedCandles(cacheKey);
+  if (cached) return res.json({ success: true, data: cached, source: 'cache' });
+
+  try {
+    const outputsize = Math.min(Math.max(days, 30), 5000);
+    const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=1day&outputsize=${outputsize}&apikey=${encodeURIComponent(TWELVEDATA_API_KEY)}`;
+    const response = await axios.get(url, { timeout: 10000 });
+
+    const candles = normalizeTwelveDataCandles(response.data);
+    if (!candles) {
+      const reason = response.data?.message || 'No candle data';
+      logger.candleFailure({ provider: 'twelvedata', ticker: symbol, endpoint: '/time_series', reason });
+      return res.status(404).json({ success: false, error: { message: `No TwelveData candles for ${symbol}: ${reason}`, code: 404 } });
+    }
+
+    setCachedCandles(cacheKey, candles);
+    res.json({ success: true, data: candles, source: 'twelvedata' });
+  } catch(e) {
+    const status  = e.response?.status || 500;
+    logger.candleFailure({ provider: 'twelvedata', ticker: symbol, endpoint: '/time_series', reason: e.message });
+    res.status(status).json({ success: false, error: { message: `TwelveData candles failed for ${symbol}: ${e.message}`, code: status } });
   }
 });
 
@@ -214,6 +312,47 @@ app.get('/api/yahoo-quote/:symbol', async (req, res) => {
   }
 });
 
+// ── YAHOO NEWS PROXY (fallback when Finnhub news is empty) ───────────────────
+// GET /api/yahoo-news/:symbol — normalized to the same shape as Finnhub news
+// ({ headline, url, datetime, source }) so the frontend renderer is unchanged.
+app.get('/api/yahoo-news/:symbol', async (req, res) => {
+  const symbol = req.params.symbol;
+  if (!symbol) {
+    return res.status(400).json({ success: false, error: { message: 'Symbol required', code: 400 } });
+  }
+
+  const cacheKey = `ynews:${symbol}`;
+  const cached = getCachedCandles(cacheKey);
+  if (cached) return res.json({ success: true, data: cached, source: 'cache' });
+
+  try {
+    const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(symbol)}&newsCount=12&quotesCount=0&enableFuzzyQuery=false`;
+    const response = await axios.get(url, { headers: YAHOO_HEADERS, timeout: 8000 });
+
+    const news = Array.isArray(response.data?.news)
+      ? response.data.news.slice(0, 12).map(n => ({
+          headline: n.title,
+          url:      n.link,
+          source:   n.publisher,
+          datetime: n.providerPublishTime || Math.floor(Date.now() / 1000),
+          image:    n.thumbnail?.resolutions?.[0]?.url || '',
+        })).filter(n => n.headline)
+      : [];
+
+    if (!news.length) {
+      return res.status(404).json({ success: false, error: { message: `No Yahoo news for ${symbol}`, code: 404 } });
+    }
+
+    // News TTL ~5min
+    candleCache.set(cacheKey, { data: news, ts: Date.now() - (CANDLE_TTL - 5 * 60 * 1000) });
+    res.json({ success: true, data: news, source: 'yahoo' });
+  } catch(e) {
+    const status  = e.response?.status || 500;
+    logger.error(`Yahoo news failed for ${symbol}: ${e.message}`);
+    res.status(status).json({ success: false, error: { message: `Yahoo news failed for ${symbol}: ${e.message}`, code: status } });
+  }
+});
+
 // ── GROQ PROXY ────────────────────────────────────────────────────────────────
 app.post('/api/groq', async (req, res) => {
   const groqKey = req.headers['x-groq-key'] || '';
@@ -228,7 +367,7 @@ app.post('/api/groq', async (req, res) => {
 
   try {
     const groqRes = await axios.post(
-      'https://api.groq.com/openai/v1/chat/completions',
+      GROQ_URL,
       {
         model:       model       || 'llama-3.3-70b-versatile',
         messages,
@@ -247,7 +386,7 @@ app.post('/api/groq', async (req, res) => {
   } catch(e) {
     const status  = e.response?.status  || 500;
     const message = e.response?.data?.error?.message || e.message || 'Groq request failed';
-    logger.error('Groq proxy error', { status, message });
+    logger.groqFailure({ endpoint: GROQ_URL, reason: message, status });
     res.status(status).json({ success: false, error: { message, code: status } });
   }
 });
@@ -270,11 +409,21 @@ app.use((error, req, res, _next) => {
 });
 
 // ── STARTUP ───────────────────────────────────────────────────────────────────
+try {
+  validateStartupConfig();
+} catch (e) {
+  logger.error('FATAL — refusing to start with invalid configuration');
+  logger.error(e.message);
+  process.exit(1);
+}
+
 app.listen(PORT, () => {
   logger.info('══════════════════════════════════════════════');
   logger.info('  StockMind AI Pro — Backend v4.0');
   logger.info(`  Listening on http://localhost:${PORT}`);
-  logger.info('  Candle providers: Yahoo Finance (primary) + Finnhub (fallback)');
-  logger.info('  Groq proxy: enabled');
+  logger.info('  Candle providers: Yahoo Finance (primary) + TwelveData (fallback)');
+  logger.info('  Finnhub: quotes / news / fundamentals only (candles disabled — free-tier 403)');
+  logger.info(`  TwelveData fallback: ${TWELVEDATA_API_KEY ? 'enabled' : 'disabled (no key)'}`);
+  logger.info(`  Groq proxy: enabled → ${GROQ_URL}`);
   logger.info('══════════════════════════════════════════════');
 });

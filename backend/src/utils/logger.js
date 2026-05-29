@@ -13,4 +13,20 @@ const logger = winston.createLogger({
   transports: [new winston.transports.Console()],
 });
 
+// ── STRUCTURED DOMAIN LOGGING ────────────────────────────────────────────────
+// Every event clearly identifies provider / ticker / endpoint / reason so that
+// candle failures, provider switches, Groq failures and normalization failures
+// are all greppable in production logs.
+logger.candleFailure = ({ provider, ticker, endpoint, reason }) =>
+  logger.warn('CANDLE_FETCH_FAILED', { provider, ticker, endpoint, reason });
+
+logger.providerSwitch = ({ from, to, ticker, reason }) =>
+  logger.info('PROVIDER_SWITCH', { from, to, ticker, reason });
+
+logger.groqFailure = ({ endpoint, reason, status }) =>
+  logger.error('GROQ_FAILED', { endpoint, reason, status });
+
+logger.normalizationFailure = ({ ticker, reason }) =>
+  logger.warn('NORMALIZATION_FAILED', { ticker, reason });
+
 module.exports = logger;

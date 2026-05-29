@@ -126,11 +126,24 @@ function validateFreshness(unixTimestamp) {
 
 /**
  * Normalize a ticker symbol — uppercase, strip whitespace.
+ *
+ * Accepts exchange-suffixed symbols such as RELIANCE.NS, TATAMOTORS.NS,
+ * VODAFONE.L and BSE symbols like 500325.BO. The previous 10-char cap rejected
+ * valid symbols (e.g. "RELIANCE.NS" = 11 chars) and produced spurious 400s.
  */
 function normalizeTicker(symbol) {
-  if (!symbol || typeof symbol !== 'string') return null;
-  const clean = symbol.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, '');
-  if (clean.length < 1 || clean.length > 10) return null;
+  if (!symbol || typeof symbol !== 'string') {
+    logger.normalizationFailure({ ticker: symbol, reason: 'not a string' });
+    return null;
+  }
+  // Keep letters, digits, dot, dash; collapse internal whitespace.
+  const clean = symbol.trim().toUpperCase().replace(/\s+/g, '').replace(/[^A-Z0-9.\-]/g, '');
+  // Base (before any exchange suffix) is what Finnhub limits; allow up to 20
+  // chars total to cover "TATAMOTORS.NS" (13), "BAJAJ-AUTO.NS" (13), etc.
+  if (clean.length < 1 || clean.length > 20) {
+    logger.normalizationFailure({ ticker: symbol, reason: `length ${clean.length} out of bounds` });
+    return null;
+  }
   return clean;
 }
 
@@ -215,8 +228,20 @@ async function getCandles(finnhubKey, symbol, resolution = 'D', from, to) {
   const cached = cache.get('candles', cacheKey);
   if (cached) return cached;
 
-  const data = await fhGet(finnhubKey, '/stock/candle', { symbol: sym, resolution, from: fromTs, to: toTs });
-  if (!data || data.s === 'no_data') throw Object.assign(new Error(`No candle data for ${sym}`), { status: 404 });
+  // NOTE: Finnhub free tier returns 403 ("You don't have access to this
+  // resource") for /stock/candle. This path is kept only as a last resort —
+  // the frontend uses Yahoo (primary) + TwelveData (fallback) for candles.
+  let data;
+  try {
+    data = await fhGet(finnhubKey, '/stock/candle', { symbol: sym, resolution, from: fromTs, to: toTs });
+  } catch (e) {
+    logger.candleFailure({ provider: 'finnhub', ticker: sym, endpoint: '/stock/candle', reason: e.message });
+    throw e;
+  }
+  if (!data || data.s === 'no_data') {
+    logger.candleFailure({ provider: 'finnhub', ticker: sym, endpoint: '/stock/candle', reason: 'no_data' });
+    throw Object.assign(new Error(`No candle data for ${sym}`), { status: 404 });
+  }
 
   cache.set('candles', cacheKey, data);
   return data;

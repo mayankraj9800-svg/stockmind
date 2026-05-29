@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Local tooling
+.claude/
+
+# Logs
+*.log
+
+# Env files with secrets (keep .env.example tracked)
+.env
+.env.local
+backend/.env
