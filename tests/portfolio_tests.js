@@ -7,8 +7,32 @@ const { loadFrontend } = require('./helpers/loadFrontend');
 const { suite, test, eq, ok, notOk } = require('./helpers/runner');
 
 module.exports = function run() {
-  const { APP } = loadFrontend();
+  const { APP, PortfolioEngine, sandbox } = loadFrontend();
   const pm = APP.portfolioMemory;
+
+  suite('Portfolio — multi-step chain executes ALL tasks in one response');
+  {
+    const p = PortfolioEngine.build({ themes: ['ai'], amount: 150000, riskTolerance: 'aggressive' });
+    const compound = 'Build the portfolio. Identify the riskiest holding. Replace it with a lower-risk alternative while preserving the objective. Explain why the replacement was chosen. Compare the two largest positions. Explain which has the stronger moat. Tell me which holding should receive additional capital over the next 5 years.';
+    const out = APP._portfolioChainHtml(compound, p);
+    test('chain runs without throwing', () => ok(typeof out.html === 'string'));
+    test('riskiest section present', () => ok(/RISKIEST HOLDING/.test(out.html)));
+    test('replacement section present', () => ok(/REPLACEMENT/.test(out.html)));
+    test('explanation (why) section present', () => ok(/WHY THIS REPLACEMENT/.test(out.html)));
+    test('two-largest comparison present', () => ok(/TWO LARGEST/.test(out.html)));
+    test('moat section present', () => ok(/MOAT/.test(out.html) && /wider moat/.test(out.html)));
+    test('capital recommendation present', () => ok(/CAPITAL OVER NEXT 5 YEARS/.test(out.html)));
+    test('chain returns the rebalanced portfolio', () => ok(out.p && out.p.holdings.length > 0));
+    test('replace within chain reduced risk', () => ok(out.p.riskScore <= p.riskScore));
+    test('only requested tasks render (build alone → no chain sections)', () => {
+      const o2 = APP._portfolioChainHtml('Build me a portfolio', PortfolioEngine.build({ themes: ['ai'], amount: 1000 }));
+      ok(!/RISKIEST HOLDING|REPLACEMENT|MOAT/.test(o2.html));
+    });
+    test('_moatVerdict picks a winner with a caveat', () => {
+      const v = APP._moatVerdict('MSFT', 'AMD');
+      ok(/MSFT/.test(v) && /qualitative/.test(v));
+    });
+  }
 
   const port = [
     { symbol: 'AAPL', qty: 10, avg: 100 },

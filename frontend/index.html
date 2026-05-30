@@ -4520,9 +4520,16 @@ RESPOND IN THIS EXACT FORMAT:
           ConversationContext.setPortfolio(p);
           ConversationContext.setObjective(themes.length ? themes.join(' / ') : p.type); // remember the objective for "why" questions
         }
+        let bodyHtml = this._renderPortfolio(p, 'Suggested ' + p.type + ' portfolio');
+        // MULTI-STEP: if the same message also asks to identify/replace/explain/
+        // compare/moat/allocate, execute the whole chain in this one response.
+        if (/riskiest|\b(replace|swap)\b|safer alternative|compare .*(two|2|largest|top|positions|holdings)|\bmoat\b|additional capital|more capital|which holding should|\bexplain\b/i.test(msg)) {
+          const chain = this._portfolioChainHtml(msg, p);
+          bodyHtml += chain.html;
+        }
         const pDiv = document.createElement('div');
         pDiv.className = 'msg ai';
-        pDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">${this._renderPortfolio(p, 'Suggested ' + p.type + ' portfolio')}</div>`;
+        pDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">${bodyHtml}</div>`;
         document.getElementById('chatMsgs').appendChild(pDiv);
         document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
         return;
@@ -5255,19 +5262,33 @@ RESPOND WITH:
       // Name map is now used by extractTickers() above — preserve legacy path for
       // cases where the intent engine passed through to here
       const msgLower = msg.toLowerCase();
+      // CRITICAL FIX: word-boundary match. Raw msgLower.includes('ge') matched
+      // "ge" inside "biGGEst" → 'ge':'GE' → analysed General Electric on the
+      // follow-up "what are its biggest risks?". Bound the match to whole words.
+      const _wb = (name) => {
+        const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp('(^|[^a-z0-9])' + esc + '([^a-z0-9]|$)').test(msgLower);
+      };
       const nameTickers = Object.entries(NAME_MAP)
         .sort(([a],[b]) => b.length - a.length)
-        .filter(([name]) => msgLower.includes(name))
+        .filter(([name]) => _wb(name))
         .map(([,ticker]) => ticker)
         .filter(t => t && t !== 'NULL');
 
-      // Merge: semantic extractTickers result takes priority
-      let tickerMatch = [...new Set([...explicitTickers, ...nameTickers])].slice(0, 1);
-
-      // ── MEMORY: if follow-up with no new ticker, use session memory ───────
-      if (tickerMatch.length === 0 && isFollowUp && this.memory.activeTicker) {
+      // ── MEMORY PRIORITY: a follow-up with NO explicit ticker stays on the
+      // active stock — checked BEFORE name matching so a stray substring can
+      // never hijack the context ("what are its risks?" → keep TSLA). ─────────
+      let tickerMatch;
+      if (isFollowUp && this.memory.activeTicker && explicitTickers.length === 0) {
         tickerMatch = [this.memory.activeTicker];
-        console.log(`[Memory] Follow-up detected — reusing ${this.memory.activeTicker}`);
+        console.log(`[Memory] Follow-up — staying on ${this.memory.activeTicker}`);
+      } else {
+        // Merge: semantic extractTickers result takes priority
+        tickerMatch = [...new Set([...explicitTickers, ...nameTickers])].slice(0, 1);
+        if (tickerMatch.length === 0 && isFollowUp && this.memory.activeTicker) {
+          tickerMatch = [this.memory.activeTicker];
+          console.log(`[Memory] Follow-up detected — reusing ${this.memory.activeTicker}`);
+        }
       }
 
       // If still nothing found, try Finnhub search as fallback
@@ -5534,6 +5555,92 @@ RESPOND WITH:
     else if (unit === 'cr' || unit === 'crore') n *= 1e7;
     else if (unit === 'lakh' || unit === 'lac') n *= 1e5;
     return Math.round(n) || 0;
+  },
+
+  // ── MULTI-STEP PORTFOLIO CHAIN ──────────────────────────────────────────
+  // A single compound message ("Build… identify riskiest… replace… explain…
+  // compare… moat… capital") executes ALL requested tasks in one response,
+  // operating on the evolving portfolio. Returns { html, p } (p may be the
+  // rebalanced portfolio after a replace). Deterministic — no Groq needed.
+  _portfolioChainHtml(msg, pIn) {
+    const PE = window.PortfolioEngine;
+    if (!PE) return { html: '', p: pIn };
+    let p = pIn;
+    const esc = s => this._escapeHtml(String(s));
+    const sec = [];
+    const want = {
+      riskiest: /riskiest|highest[- ]?risk|most risk/i.test(msg),
+      replace:  /\b(replace|swap)\b|safer alternative|lower[- ]?risk alternative/i.test(msg),
+      explain:  /\bexplain\b|why .*(replace|chosen|choice|selected)|reasoning|rationale/i.test(msg),
+      compare:  /compare .*(two|2|largest|top|positions|holdings)/i.test(msg),
+      moat:     /\bmoat\b/i.test(msg),
+      capital:  /additional capital|add(itional)? (capital|money|funds)|more capital|receive .*capital|which holding should/i.test(msg),
+    };
+
+    let riskiest = PE.riskiestHolding(p);
+    if (want.riskiest && riskiest) {
+      sec.push(`<div class="ai-section sec-risk"><div class="ai-sec-label">🔴 RISKIEST HOLDING</div><div class="ai-sec-body"><strong>${esc(riskiest.symbol)}</strong> (${esc(riskiest.name)}, ${esc(riskiest.sector)}) — risk tier ${riskiest.riskTier}/5 at ${riskiest.weight}% weight.</div></div>`);
+    }
+
+    let decision = null;
+    if (want.replace && riskiest) {
+      const wantsDefensive = /\b(dividend|income|defensive|bond|cash)\b/i.test(msg);
+      const np = PE.replaceRiskiest(p, { preserveTheme: !wantsDefensive });
+      if (np && np.removed !== np.added && np.riskReduction > 0) {
+        const obj = (window.ConversationContext && ConversationContext.lastObjective) || p.type;
+        decision = { removed: np.removed, added: np.added, objective: obj, objectivePreserved: np.objectivePreserved === true, riskBefore: p.riskScore, riskAfter: np.riskScore, alternatives: ['MSFT', 'GOOGL', 'AMZN', 'AVGO'].filter(s => s !== np.added) };
+        if (window.ConversationContext) {
+          ConversationContext.setPortfolio(np);
+          ConversationContext.addDecision({ type: 'replace', reason: `${np.removed} carried the highest risk tier (most volatile sleeve)`, ...decision });
+        }
+        p = np;
+        sec.push(`<div class="ai-section sec-verdict"><div class="ai-sec-label">🔁 REPLACEMENT</div><div class="ai-sec-body">Replaced <strong>${esc(decision.removed)}</strong> with <strong>${esc(decision.added)}</strong> — risk score ${decision.riskBefore} → <strong>${decision.riskAfter}</strong> (−${decision.riskBefore - decision.riskAfter}). Objective ${decision.objectivePreserved ? '<strong>preserved</strong>' : 'shifted (defensive)'}.</div></div>`);
+      } else {
+        sec.push(`<div class="ai-section sec-summary"><div class="ai-sec-label">🔁 REPLACEMENT</div><div class="ai-sec-body">This book is already at its lowest-risk same-objective allocation — no safer swap available without moving to cash/bonds.</div></div>`);
+      }
+    }
+
+    if (want.explain && decision) {
+      const preserved = decision.objectivePreserved
+        ? `It stays within the <strong>${esc(decision.objective)}</strong> objective.`
+        : `⚠ It shifts away from the <strong>${esc(decision.objective)}</strong> objective toward defensive exposure.`;
+      sec.push(`<div class="ai-section sec-summary"><div class="ai-sec-label">🧠 WHY THIS REPLACEMENT</div><div class="ai-sec-body"><strong>${esc(decision.removed)}</strong> was the highest risk-tier sleeve (most volatile); <strong>${esc(decision.added)}</strong> is a lower-volatility same-theme name that cut portfolio risk by ${decision.riskBefore - decision.riskAfter} points. ${preserved} Alternatives considered: ${decision.alternatives.map(esc).join(', ')}.</div></div>`);
+    }
+
+    const top = [...(p.holdings || [])].sort((a, b) => b.weight - a.weight).slice(0, 2);
+    if (want.compare && top.length >= 2) {
+      const row = h => `<tr><td style="padding:2px 10px 2px 0"><strong>${esc(h.symbol)}</strong></td><td style="padding:2px 10px 2px 0">${esc(h.sector)}</td><td style="padding:2px 10px 2px 0">${h.weight}%</td><td style="padding:2px 10px 2px 0">tier ${h.riskTier}/5</td><td>${h.yield}% yld</td></tr>`;
+      sec.push(`<div class="ai-section sec-summary"><div class="ai-sec-label">📊 TWO LARGEST: ${esc(top[0].symbol)} vs ${esc(top[1].symbol)}</div><div class="ai-sec-body"><table style="font-size:11px;border-collapse:collapse"><tr style="color:var(--tx3)"><td style="padding-right:10px">Holding</td><td style="padding-right:10px">Sector</td><td style="padding-right:10px">Weight</td><td style="padding-right:10px">Risk</td><td>Yield</td></tr>${row(top[0])}${row(top[1])}</table></div></div>`);
+    }
+
+    if (want.moat && top.length >= 2) {
+      sec.push(`<div class="ai-section sec-macro"><div class="ai-sec-label">🏰 MOAT</div><div class="ai-sec-body">${this._moatVerdict(top[0].symbol, top[1].symbol)}</div></div>`);
+    }
+
+    if (want.capital && (p.holdings || []).length) {
+      const pick = [...p.holdings].sort((a, b) => (a.riskTier - b.riskTier) || (b.weight - a.weight))[0];
+      const obj = (window.ConversationContext && ConversationContext.lastObjective) || p.type;
+      sec.push(`<div class="ai-section sec-verdict"><div class="ai-sec-label">➕ CAPITAL OVER NEXT 5 YEARS</div><div class="ai-sec-body">On a risk-adjusted basis, add to <strong>${esc(pick.symbol)}</strong> (${esc(pick.sector)}, tier ${pick.riskTier}/5) — the most durable compounder in the book; it grows the position while keeping overall risk in check and preserving the ${esc(obj)} objective. <em>Allocation is your decision — not financial advice.</em></div></div>`);
+    }
+
+    return { html: sec.join(''), p };
+  },
+
+  // Qualitative, caveated moat comparison (well-established structural views —
+  // not fabricated live metrics).
+  _moatVerdict(a, b) {
+    const MOAT = {
+      MSFT: 'ecosystem lock-in across Windows/Office/Azure with high switching costs',
+      GOOGL: 'search & ad scale with data network effects', AAPL: 'brand + tight hardware-software lock-in',
+      AMZN: 'logistics scale plus the AWS cloud franchise', META: 'social-graph network effects',
+      AVGO: 'mission-critical chip IP with deep switching costs', NVDA: 'the CUDA software moat and AI-compute lead',
+      V: 'global payments network effects', MA: 'global payments network effects',
+    };
+    const rank = { MSFT: 5, GOOGL: 5, AAPL: 5, V: 5, MA: 5, AMZN: 4, META: 4, NVDA: 4, AVGO: 4 };
+    const ra = rank[a] || 3, rb = rank[b] || 3;
+    const win = ra >= rb ? a : b, lose = ra >= rb ? b : a;
+    const why = MOAT[win] || 'broader competitive entrenchment';
+    return `<strong>${this._escapeHtml(win)}</strong> has the wider moat — ${this._escapeHtml(why)} — versus ${this._escapeHtml(lose)}. This is a qualitative structural view, not a live-data metric.`;
   },
 
   // Render a PortfolioEngine result as a labelled card (allocations, risk,

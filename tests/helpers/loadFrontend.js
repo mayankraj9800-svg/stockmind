@@ -88,6 +88,11 @@ function loadFrontend() {
     const p = path.join(enginesDir, f);
     if (fs.existsSync(p)) vm.runInContext(fs.readFileSync(p, 'utf8'), sandbox, { filename: f });
   }
+  // In the browser `window === globalThis`, so app code can reference engines as
+  // bare globals (e.g. `ConversationContext.lastObjective`) after a
+  // `window.X &&` guard. Mirror that here so the sandbox matches browser scope.
+  for (const k of ['ConversationContext', 'PortfolioEngine', 'WatchlistEngine', 'IndexRouter'])
+    if (win[k]) sandbox[k] = win[k];
 
   // Expose APP/CONFIG/ApiClient out of the script's top-level `const` scope.
   const wrapped = best + '\n;globalThis.__APP = (typeof APP!=="undefined")?APP:null;'
