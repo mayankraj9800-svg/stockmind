@@ -82,6 +82,41 @@ module.exports = function run() {
     eq(CC.resolveReference('which one should receive additional capital?').kind, 'portfolio-followup');
   });
 
+  suite('Context — reasoning follow-up beats asset lookup (decision memory)');
+  CC.clear();
+  CC.setPortfolio({ type: 'aggressive', riskScore: 83, holdings: [{ symbol: 'SCHD', weight: 20, riskTier: 2 }] });
+  CC.setObjective('ai / technology');
+  CC.addDecision({ type: 'replace', removed: 'NVDA', added: 'SCHD', reason: 'highest risk tier', objective: 'ai / technology', objectivePreserved: false, alternatives: ['MSFT', 'GOOGL', 'AMZN'], riskBefore: 83, riskAfter: 68 });
+  test('"Why did you replace NVIDIA with SCHD?" → portfolio-reasoning (NOT etf lookup)', () => {
+    const r = CC.resolveReference('Why did you replace NVIDIA with SCHD instead of another AI or cloud company?', { reservedCaps: reserved });
+    eq(r.kind, 'portfolio-reasoning');
+  });
+  test('reasoning carries the stored decision', () => {
+    const r = CC.resolveReference('why that choice?', { reservedCaps: reserved });
+    eq(r.decision.removed, 'NVDA'); eq(r.decision.added, 'SCHD');
+    ok(r.decision.alternatives.includes('MSFT')); eq(r.decision.objectivePreserved, false);
+  });
+  test('"explain the change" → portfolio-reasoning', () => eq(CC.resolveReference('explain the change', { reservedCaps: reserved }).kind, 'portfolio-reasoning'));
+  test('decisionHistory retains the decision', () => ok(CC.decisionHistory.some(d => d.removed === 'NVDA')));
+  test('a genuine "analyse SCHD" lookup is NOT a reasoning follow-up', () => {
+    // no reasoning words → must fall through to asset lookup
+    notOk(CC.resolveReference('analyse SCHD', { reservedCaps: reserved }).kind === 'portfolio-reasoning');
+  });
+  test('switching to a stock clears the decision', () => { CC.setStock('AAPL'); eq(CC.lastDecision, null); });
+  test('IMPERATIVE "Replace it with a safer alternative" is NOT reasoning (it is an action)', () => {
+    CC.clear(); CC.setPortfolio({ type: 'ai', holdings: [{ symbol: 'NVDA', weight: 30, riskTier: 5 }] });
+    notOk(CC.resolveReference('Replace it with a safer alternative while preserving the AI/cloud objective.').kind === 'portfolio-reasoning');
+  });
+  test('"Replace it…" resolves to portfolio-followup (action)', () => {
+    CC.clear(); CC.setPortfolio({ type: 'ai', holdings: [{ symbol: 'NVDA', weight: 30, riskTier: 5 }] });
+    eq(CC.resolveReference('Replace it with a safer alternative.').kind, 'portfolio-followup');
+  });
+  test('"Why did you replace NVIDIA with SCHD?" IS reasoning (past-tense question)', () => {
+    CC.clear(); CC.setPortfolio({ type: 'ai', holdings: [{ symbol: 'SCHD' }] });
+    CC.addDecision({ type: 'replace', removed: 'NVDA', added: 'SCHD', alternatives: ['MSFT'] });
+    eq(CC.resolveReference('Why did you replace NVIDIA with SCHD?', { reservedCaps: reserved }).kind, 'portfolio-reasoning');
+  });
+
   suite('Context — scanner memory (Priority 7)');
   CC.clear(); CC.setScanner({ bull: [{ sym: 'AAPL', note: '+2%' }], momentum: [{ sym: 'NVDA', note: 'breakout' }], aiPicks: [{ sym: 'NVDA' }], volatile: [], bear: [] });
   test('scanner stored + activeTopic=scanner', () => { ok(CC.lastScanner); eq(CC.activeTopic, 'scanner'); });

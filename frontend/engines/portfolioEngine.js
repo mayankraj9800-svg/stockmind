@@ -146,6 +146,15 @@
   const SAFER_US = H('SCHD','Schwab US Dividend','Dividend Equity',0,3.5,2);
   const SAFER_IN = H('HDFCBANK.NS','HDFC Bank','Banking',0,1.0,2);
 
+  // Lower-risk, THEME-PRESERVING swaps for AI/cloud/tech books — used when the
+  // user asks to replace the riskiest holding "while preserving the objective".
+  const THEME_SAFER_TECH = [
+    H('MSFT','Microsoft','Technology',0,0.7,3),
+    H('GOOGL','Alphabet','Communication Services',0,0,3),
+    H('AMZN','Amazon','Consumer Discretionary',0,0,3),
+    H('AVGO','Broadcom','Semiconductors',0,1.2,4),
+  ];
+
   function pickType(input) {
     if (input.type && (US_BASKETS[input.type] || IN_BASKETS[input.type])) return input.type;
     const themes = (input.themes || []).map(t => String(t).toLowerCase());
@@ -245,11 +254,26 @@
 
   // Replace the riskiest holding with a safer alternative, re-normalise, and
   // report how much the portfolio risk dropped.
-  function replaceRiskiest(portfolio) {
+  function replaceRiskiest(portfolio, opts) {
+    opts = opts || {};
     if (!portfolio) return null;
     const worst = riskiestHolding(portfolio);
     if (!worst) return portfolio;
-    const safer = portfolio.country === 'IN' ? { ...SAFER_IN } : { ...SAFER_US };
+    let safer = portfolio.country === 'IN' ? { ...SAFER_IN } : { ...SAFER_US };
+    // Priority: OBJECTIVE preservation → risk reduction → diversification.
+    // Theme preservation is the DEFAULT for themed books (ai/tech/growth/
+    // aggressive); callers can opt out (opts.preserveTheme === false) for an
+    // explicit defensive/income request. Keeps the objective by swapping the
+    // riskiest tech name for a LOWER-risk same-theme name (NVDA → MSFT/AMZN),
+    // not a dividend ETF — falling back to the generic safe only if none fits.
+    const themed = /ai|tech|growth|aggressive|semic/i.test(portfolio.type || '');
+    const preserve = (opts.preserveTheme !== undefined) ? opts.preserveTheme : themed;
+    let objectivePreserved = false;
+    if (preserve && /tech|semic|software|communication|consumer discretionary|internet|ai/i.test(worst.sector || '')) {
+      const have = new Set(portfolio.holdings.map(h => h.symbol));
+      const cand = THEME_SAFER_TECH.find(c => !have.has(c.symbol) && c.riskTier < worst.riskTier);
+      if (cand) { safer = { ...cand }; objectivePreserved = true; }
+    }
     // if safer symbol already present, fold weight into it; else swap in place
     const newHoldings = [];
     let folded = false;
@@ -272,6 +296,7 @@
       type: portfolio.type, country: portfolio.country, currency: portfolio.currency, amount: portfolio.amount,
       removed: worst.symbol, added: safer.symbol,
       riskReduction: portfolio.riskScore - rebuilt.riskScore,
+      objectivePreserved,
       disclaimer: portfolio.disclaimer,
     };
   }

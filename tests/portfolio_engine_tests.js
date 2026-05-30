@@ -88,6 +88,29 @@ module.exports = function run() {
 
   suite('Portfolio — disclaimer (no fake live data claim)');
   test('every portfolio carries a model disclaimer', () => ok(/model|estimate|not financial advice/i.test(p1.disclaimer)));
+
+  suite('Portfolio — theme-preserving replacement (preserveTheme)');
+  const aiPort = PE.build({ themes: ['ai'], amount: 100000 });
+  test('default replace lowers risk', () => ok(PE.replaceRiskiest(aiPort).riskReduction > 0));
+  test('preserveTheme swaps for a LOWER-risk tech name (not a dividend ETF)', () => {
+    const r = PE.replaceRiskiest(aiPort, { preserveTheme: true });
+    ok(r.added !== 'SCHD', 'should not fall back to SCHD when a theme-safe swap exists');
+    ok(/MSFT|GOOGL|AMZN|AVGO/.test(r.added), 'theme-preserving swap got: ' + r.added);
+    ok(r.riskReduction > 0, 'still reduces risk');
+  });
+  test('themed portfolio preserves objective by DEFAULT (no opts) — Priority 3', () => {
+    const r = PE.replaceRiskiest(aiPort); // no opts
+    eq(r.objectivePreserved, true); ok(r.added !== 'SCHD');
+  });
+  test('explicit defensive opt-out → generic safe swap allowed', () => {
+    const r = PE.replaceRiskiest(aiPort, { preserveTheme: false });
+    eq(r.objectivePreserved, false);
+  });
+  test('engine reports objectivePreserved flag', () => ok('objectivePreserved' in PE.replaceRiskiest(aiPort)));
+
+  suite('Portfolio — explicit type keyword honoured');
+  test('type:retirement → retirement (low risk)', () => { const p = PE.build({ type: 'retirement', amount: 100000 }); eq(p.type, 'retirement'); ok(p.riskScore < 50); });
+  test('type:aggressive → aggressive', () => eq(PE.build({ type: 'aggressive', amount: 1000 }).type, 'aggressive'));
 };
 
 if (require.main === module) { module.exports(); require('./helpers/runner').summary(); }

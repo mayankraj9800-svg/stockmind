@@ -1064,7 +1064,7 @@ input, select, textarea, button { max-width: 100%; }
     </div>
     <div class="topbar-right">
       <div class="status-pill" id="connPill"><div class="live-dot"></div> LIVE</div>
-      <button class="btn-icon" id="changeKeyBtn" title="Change Groq key">⚙</button>
+      <button class="btn-icon" id="changeKeyBtn" title="Change API keys (Finnhub + Groq)">⚙</button>
     </div>
   </div>
 
@@ -2699,14 +2699,37 @@ const APP = {
     // Brief
     document.getElementById('briefBtn')?.addEventListener('click', () => this.generateBrief());
 
-    // Change Groq key
+    // Change API keys — BOTH Finnhub and Groq (each optional; blank = keep current)
     document.getElementById('changeKeyBtn')?.addEventListener('click', async () => {
-      const newKey = prompt('Enter new Groq API key (starts with gsk_):');
-      if (newKey && newKey.trim()) {
-        this.groqKey = newKey.trim();
-        await this.saveUserData({ groqKey: newKey.trim() });
-        this.toast('✅ Groq key updated & saved');
+      const mask = k => k ? '••••' + String(k).slice(-4) : '(not set)';
+
+      const fhIn = prompt(`Finnhub API key  (current: ${mask(this.finnhubKey)})\nPaste a new key, or leave blank to keep the current one:`);
+      if (fhIn === null) return; // user cancelled the whole flow
+      const gqIn = prompt(`Groq API key — must start with "gsk_"  (current: ${mask(this.groqKey)})\nPaste a new key, or leave blank to keep the current one:`);
+
+      const updates = {};
+      const changed = [];
+      if (fhIn && fhIn.trim()) {
+        this.finnhubKey = fhIn.trim();
+        updates.finnhubKey = this.finnhubKey;
+        changed.push('Finnhub');
       }
+      if (gqIn && gqIn.trim()) {
+        const g = gqIn.trim();
+        if (!g.startsWith('gsk_')) {
+          this.toast('⚠️ Groq key must start with "gsk_" — Groq key NOT changed');
+        } else {
+          this.groqKey = g;
+          updates.groqKey = g;
+          changed.push('Groq');
+        }
+      }
+
+      if (!Object.keys(updates).length) { this.toast('No keys changed'); return; }
+      await this.saveUserData(updates);
+      this.toast(`✅ ${changed.join(' & ')} key${changed.length > 1 ? 's' : ''} updated & saved`);
+      // If the Finnhub key changed, re-check the backend connection immediately.
+      if (updates.finnhubKey && typeof this.runHealthCheck === 'function') this.runHealthCheck();
     });
   },
 
@@ -4377,6 +4400,36 @@ RESPOND IN THIS EXACT FORMAT:
         return;
       }
 
+      // ── REASONING FOLLOW-UP (highest priority) — must beat ETF/asset lookup.
+      // "Why did you replace NVIDIA with SCHD?" must explain the DECISION, never
+      // show an SCHD factsheet. Resolved from decision/portfolio memory. ───────
+      if (window.ConversationContext) {
+        const rRef = ConversationContext.resolveReference(msg, { reservedCaps: t => this.RESERVED_FINANCE_TERMS.has(t) || this.MARKET_REGION_TERMS.has(t) });
+        if (rRef.kind === 'portfolio-reasoning') {
+          thinkDiv.remove();
+          const dec = rRef.decision; const p = rRef.portfolio; const obj = rRef.objective || (p && p.type) || 'your stated objective';
+          let body;
+          if (dec && dec.type === 'replace') {
+            const preserved = dec.objectivePreserved
+              ? `It stays aligned with your <strong>${this._escapeHtml(String(obj))}</strong> objective.`
+              : `⚠ Note: <strong>${this._escapeHtml(dec.added)}</strong> is a defensive/dividend holding, so it does <strong>not</strong> preserve the <strong>${this._escapeHtml(String(obj))}</strong> objective — it trades theme exposure for lower volatility.`;
+            body = `<strong>Why ${this._escapeHtml(dec.removed)} → ${this._escapeHtml(dec.added)}:</strong><br>
+              • <strong>Why ${this._escapeHtml(dec.removed)} was risky:</strong> ${this._escapeHtml(dec.reason)}<br>
+              • <strong>Why ${this._escapeHtml(dec.added)} reduced risk:</strong> it's a lower-volatility holding, cutting the book's risk score ${dec.riskBefore} → <strong>${dec.riskAfter}</strong>.<br>
+              • <strong>Objective alignment:</strong> ${preserved}<br>
+              • <strong>Alternatives considered:</strong> ${dec.alternatives.map(a => this._escapeHtml(a)).join(', ')} — lower-risk than ${this._escapeHtml(dec.removed)} while keeping the theme. Say "use ${this._escapeHtml(dec.alternatives[0] || 'one of those')} instead" to swap.<br>
+              • <strong>Trade-off:</strong> lower expected growth in exchange for smaller drawdowns.`;
+          } else {
+            body = `The current ${this._escapeHtml(String(obj))} allocation balances growth against risk. Ask "which holding is riskiest?" or "replace it with something safer" to adjust, and I'll explain each change.`;
+          }
+          const d = document.createElement('div'); d.className = 'msg ai';
+          d.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><div class="ai-section sec-verdict"><div class="ai-sec-label">🧠 DECISION RATIONALE</div><div class="ai-sec-body">${body}</div></div></div>`;
+          document.getElementById('chatMsgs').appendChild(d);
+          document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+          return;
+        }
+      }
+
       // ── ETF / INDEX ROUTING — never analyse an ETF or index as a company ──
       const IR = window.IndexRouter;
       if (IR) {
@@ -4452,11 +4505,21 @@ RESPOND IN THIS EXACT FORMAT:
         if (/\bai\b|artificial intel/i.test(msg)) themes.push('ai');
         if (/cloud|cyber|semic|tech/i.test(msg)) themes.push('technology');
         if (/global|international/i.test(msg)) themes.push('global');
+        // Explicit portfolio TYPE keywords ("retirement/dividend/aggressive…")
+        // so "build a retirement portfolio" (no age) still builds a retirement mix.
+        let explicitType;
+        if (/\bretirement\b/i.test(msg))         explicitType = 'retirement';
+        else if (/\b(dividend|income)\b/i.test(msg)) explicitType = 'dividend';
+        else if (/\baggressive\b/i.test(msg))    explicitType = 'aggressive';
+        else if (/\bconservative\b/i.test(msg))  explicitType = 'conservative';
         const p = window.PortfolioEngine.build({
-          amount, age: profile.age, riskTolerance: profile.riskTolerance,
+          type: explicitType, amount, age: profile.age, riskTolerance: profile.riskTolerance,
           income: profile.income, themes, country: profile.country || 'US',
         });
-        if (window.ConversationContext) ConversationContext.setPortfolio(p);
+        if (window.ConversationContext) {
+          ConversationContext.setPortfolio(p);
+          ConversationContext.setObjective(themes.length ? themes.join(' / ') : p.type); // remember the objective for "why" questions
+        }
         const pDiv = document.createElement('div');
         pDiv.className = 'msg ai';
         pDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai">${this._renderPortfolio(p, 'Suggested ' + p.type + ' portfolio')}</div>`;
@@ -4473,13 +4536,30 @@ RESPOND IN THIS EXACT FORMAT:
           const p = ref.portfolio;
           let html;
           if (/replace|safer alternative|swap/i.test(msg)) {
-            const np = window.PortfolioEngine.replaceRiskiest(p);
+            // Objective preservation is the DEFAULT — only opt out if the user
+            // explicitly wants a defensive/income tilt.
+            const wantsDefensive = /\b(dividend|income|defensive|bond|cash|most conservative|safest possible|capital preservation)\b/i.test(msg);
+            const np = window.PortfolioEngine.replaceRiskiest(p, { preserveTheme: !wantsDefensive });
             if (!np || np.removed === np.added || (np.riskReduction || 0) <= 0) {
               // Already at the lowest-risk allocation — no safer swap exists.
               html = `<div class="ai-section sec-summary"><div class="ai-sec-label">✅ ALREADY LOW RISK</div><div class="ai-sec-body">This is already a low-risk (${this._escapeHtml(p.type)}) allocation at risk score <strong>${p.riskScore}</strong>/100 — there's no meaningfully safer holding to swap in without moving to cash/bonds. Tell me if you'd like a higher cash/bond weighting.</div></div>`;
             } else {
               ConversationContext.setPortfolio(np);
-              html = `<div class="ai-section sec-verdict"><div class="ai-sec-label">🔁 SAFER PORTFOLIO</div><div class="ai-sec-body">Replaced riskiest holding <strong>${this._escapeHtml(np.removed)}</strong> with <strong>${this._escapeHtml(np.added)}</strong>. Risk score ${p.riskScore} → <strong>${np.riskScore}</strong> (−${np.riskReduction}).</div></div>` + this._renderPortfolio(np, 'Rebalanced portfolio');
+              // Record the decision + rationale so "why did you replace X with
+              // Y?" can be answered from memory (not an asset lookup).
+              const obj = ConversationContext.lastObjective || p.type;
+              const themeAlts = /ai|tech|cloud|semic/i.test(obj)
+                ? ['MSFT', 'GOOGL', 'AMZN', 'AVGO'].filter(s => s !== np.added)
+                : ['low-volatility sector ETFs', 'large-cap value names'];
+              ConversationContext.addDecision({
+                type: 'replace', removed: np.removed, added: np.added,
+                reason: `${np.removed} carried the highest risk tier in the book (most volatile sleeve); swapping it cut portfolio risk by ${np.riskReduction} points.`,
+                objective: obj,
+                objectivePreserved: np.objectivePreserved === true,
+                alternatives: themeAlts,
+                riskBefore: p.riskScore, riskAfter: np.riskScore,
+              });
+              html = `<div class="ai-section sec-verdict"><div class="ai-sec-label">🔁 SAFER PORTFOLIO</div><div class="ai-sec-body">Replaced riskiest holding <strong>${this._escapeHtml(np.removed)}</strong> with <strong>${this._escapeHtml(np.added)}</strong>. Risk score ${p.riskScore} → <strong>${np.riskScore}</strong> (−${np.riskReduction}). Ask "why?" for the rationale.</div></div>` + this._renderPortfolio(np, 'Rebalanced portfolio');
             }
           } else if (/riskiest|most risk|highest risk/i.test(msg)) {
             const w = window.PortfolioEngine.riskiestHolding(p);
@@ -4585,6 +4665,7 @@ RESPOND IN THIS EXACT FORMAT:
           return;
         }
         setThinkText(`Fetching live data for ${cmpTickers.join(' vs ')}…`);
+        let cmpRendered = false; // once the answer is shown, never show COMPARE ERROR after it
         try {
           // Fetch FULL data per ticker (quote+profile+metrics via /analyse,
           // Yahoo-fallback quote for .NS/intl, candles for real RSI/MACD) so
@@ -4620,6 +4701,7 @@ RESPOND IN THIS EXACT FORMAT:
             d.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><div class="ai-section sec-risk"><div class="ai-sec-label">📊 COMPARISON LIMITED</div><div class="ai-sec-body">Couldn't fetch reliable live prices for <strong>${this._escapeHtml(failed || cmpTickers.join(', '))}</strong> right now (provider coverage/limit). Try again in a moment, or analyse each ticker individually.</div></div></div>`;
             document.getElementById('chatMsgs').appendChild(d);
             document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
+            cmpRendered = true;
             return;
           }
 
@@ -4638,12 +4720,18 @@ RESPOND IN THIS EXACT FORMAT:
           }
           document.getElementById('chatMsgs').appendChild(aiDiv);
           document.getElementById('chatMsgs').scrollTop = document.getElementById('chatMsgs').scrollHeight;
-          this.saveToHistory(`Compare: ${cmpTickers.join(' vs ')}`, result || '(data only)', null);
+          cmpRendered = true;
+          // History save must NEVER turn a rendered answer into a COMPARE ERROR.
+          try { this.saveToHistory(`Compare: ${cmpTickers.join(' vs ')}`, result || '(data only)', null); }
+          catch (he) { console.warn('[Compare] history save failed (non-fatal):', he?.message); }
         } catch(e) {
+          // Only show the error if NOTHING was rendered — a post-render failure
+          // (e.g. history save) must not append an error under a good answer.
+          if (cmpRendered) { console.warn('[Compare] post-render error (non-fatal):', e?.message); return; }
           if (thinkDiv.isConnected) thinkDiv.remove();
           const errDiv = document.createElement('div');
           errDiv.className = 'msg ai';
-          errDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><div class="ai-section sec-risk"><div class="ai-sec-label">⚠️ COMPARE ERROR</div><div class="ai-sec-body">Could not fetch comparison data. Please try the Compare tab directly.</div></div></div>`;
+          errDiv.innerHTML = `<div class="msg-label">StockMind AI Pro</div><div class="bubble ai"><div class="ai-section sec-risk"><div class="ai-sec-label">⚠️ COMPARE ERROR</div><div class="ai-sec-body">Could not fetch comparison data for ${this._escapeHtml(cmpTickers.join(', '))}. Please try again in a moment.</div></div></div>`;
           document.getElementById('chatMsgs').appendChild(errDiv);
         }
         return;

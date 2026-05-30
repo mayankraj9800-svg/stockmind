@@ -28,6 +28,9 @@
     lastWatchlist:       null,   // watchlist object from WatchlistEngine
     lastScanner:         null,   // scanner results { region, results:[...] }
     lastETF:             null,   // last ETF symbol discussed
+    lastDecision:        null,   // most recent portfolio decision (e.g. a replace)
+    lastObjective:       null,   // portfolio objective/themes (e.g. ['ai','technology'])
+    decisionHistory:     [],     // rolling log of decisions + rationale
     activeTopic:         null,   // 'stock'|'comparison'|'portfolio'|'watchlist'|'scanner'|'etf'
     lastUserProfile:     { riskTolerance: null, age: null, horizon: null, income: null, country: null },
     turns:               [],
@@ -42,9 +45,19 @@
       if (topic !== 'portfolio')  this.lastPortfolio = null;
       if (topic !== 'watchlist')  this.lastWatchlist = null;
       if (topic !== 'scanner')    this.lastScanner = null;
+      if (topic !== 'portfolio')  { this.lastDecision = null; this.lastObjective = null; }
       if (topic !== 'stock' && topic !== 'comparison' && topic !== 'etf') this.lastPrimarySymbol = null;
       this.updatedAt = Date.now();
     },
+
+    // Record a portfolio decision + rationale so future "why?" questions can be
+    // answered from memory instead of falling back to an asset lookup.
+    addDecision(d) {
+      this.lastDecision = d || null;
+      if (d) { this.decisionHistory.push(d); if (this.decisionHistory.length > 10) this.decisionHistory.shift(); }
+      this.updatedAt = Date.now();
+    },
+    setObjective(o) { this.lastObjective = o || null; },
 
     // ── setters ───────────────────────────────────────────────────────────
     setStock(symbol, entity) {
@@ -102,6 +115,27 @@
       // Follow-ups resolve ONLY against the active topic — a stale portfolio or
       // comparison can never hijack a different subject.
 
+      // ── PRIORITY 1: REASONING follow-up ("why did you replace NVIDIA with
+      // SCHD?", "explain", "what changed?", "instead of another AI stock?").
+      // Highest priority so it WINS over asset/ETF lookup even when the message
+      // names tickers that belong to the active decision/context.
+      // Reasoning asks ABOUT a decision ("why/explain/instead of"). It must NOT
+      // fire on an IMPERATIVE command ("Replace it with a safer alternative"),
+      // but MUST fire on a question that merely describes a past action
+      // ("Why did you replace NVIDIA with SCHD?"). So only a leading action verb
+      // vetoes reasoning — not the word appearing mid-sentence.
+      const startsWithAction = /^\s*(replace|swap|rebalance|build|create|construct|make|add|buy|sell|allocate|diversify|set|change)\b/i.test(m);
+      const reasoning = !startsWithAction &&
+        /\b(why|explain|reasoning|rationale|justify|what changed|pros and cons|trade[-\s]?offs?|instead of|why (that|this|did)|how come|on what basis)\b/i.test(m);
+      if (reasoning) {
+        if (this.activeTopic === 'portfolio' && (this.lastDecision || this.lastPortfolio))
+          return { kind: 'portfolio-reasoning', decision: this.lastDecision, portfolio: this.lastPortfolio, objective: this.lastObjective };
+        if (this.activeTopic === 'comparison' && this.lastComparison)
+          return { kind: 'comparison-followup', symbols: [...this.lastComparison] };
+        if (this.activeTopic === 'stock' && this.lastPrimarySymbol)
+          return { kind: 'single-followup', symbol: this.lastPrimarySymbol };
+      }
+
       // comparison follow-up: "which has a stronger moat / which is safer / them"
       if (this.activeTopic === 'comparison' && this.lastComparison && !hasNewTicker &&
           /\b(which|stronger|weaker|safer|riskier|better|worse|moat|cheaper|both|them|the (former|latter)|first one|second one)\b/i.test(m))
@@ -142,6 +176,7 @@
     clear() {
       this.lastPrimarySymbol = this.lastSecondarySymbol = this.lastComparison = null;
       this.lastPortfolio = this.lastWatchlist = this.lastScanner = this.lastETF = this.lastEntity = null;
+      this.lastDecision = this.lastObjective = null; this.decisionHistory = [];
       this.activeTopic = null;
       this.lastUserProfile = { riskTolerance: null, age: null, horizon: null, income: null, country: null };
       this.turns = []; this.updatedAt = 0;
