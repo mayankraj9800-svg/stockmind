@@ -117,6 +117,38 @@ module.exports = function run() {
     eq(CC.resolveReference('Why did you replace NVIDIA with SCHD?', { reservedCaps: reserved }).kind, 'portfolio-reasoning');
   });
 
+  suite('Context — explicit requests OUTRANK stale memory (Rules 1/2/3/5/6)');
+  // Stale portfolio active; explicit new requests must NOT resolve to memory.
+  const stalePortfolio = () => { CC.clear(); CC.setPortfolio({ type: 'ai', holdings: [{ symbol: 'NVDA', weight: 100, riskTier: 5 }] }); CC.addDecision({ type: 'replace', removed: 'NVDA', added: 'AMZN', alternatives: ['MSFT'] }); };
+  test('"Analyze Reliance and explain… Nifty 50" → NONE (not portfolio-reasoning)', () => {
+    stalePortfolio();
+    eq(CC.resolveReference('Analyze Reliance Industries and explain whether it can outperform the Nifty 50.', { reservedCaps: reserved }).kind, 'none');
+  });
+  test('"Compare Reliance and TCS" → NONE (not portfolio reasoning)', () => {
+    stalePortfolio();
+    eq(CC.resolveReference('Compare Reliance and TCS.', { reservedCaps: reserved }).kind, 'none');
+  });
+  test('"Analyze Apple" with stale portfolio → NONE', () => {
+    stalePortfolio();
+    eq(CC.resolveReference('Analyze Apple.', { reservedCaps: reserved }).kind, 'none');
+  });
+  test('"build me a portfolio" → NONE (fresh build outranks memory)', () => {
+    stalePortfolio();
+    eq(CC.resolveReference('Build a healthcare portfolio.', { reservedCaps: reserved }).kind, 'none');
+  });
+  test('"invest in three Indian stocks" → NONE (fresh plan)', () => {
+    stalePortfolio();
+    eq(CC.resolveReference('You have 2000000 and can invest in only three Indian stocks.', { reservedCaps: reserved }).kind, 'none');
+  });
+  test('but "why was it replaced?" still → portfolio-reasoning (pure follow-up)', () => {
+    stalePortfolio();
+    eq(CC.resolveReference('why was it replaced?', { reservedCaps: reserved }).kind, 'portfolio-reasoning');
+  });
+  test('"compare the two positions in that portfolio" still → portfolio-followup (refs active book)', () => {
+    CC.clear(); CC.setPortfolio({ type: 'ai', holdings: [{ symbol: 'NVDA', weight: 60, riskTier: 5 }, { symbol: 'MSFT', weight: 40, riskTier: 3 }] });
+    eq(CC.resolveReference('compare the two largest positions in that portfolio', { reservedCaps: reserved }).kind, 'portfolio-followup');
+  });
+
   suite('Context — scanner memory (Priority 7)');
   CC.clear(); CC.setScanner({ bull: [{ sym: 'AAPL', note: '+2%' }], momentum: [{ sym: 'NVDA', note: 'breakout' }], aiPicks: [{ sym: 'NVDA' }], volatile: [], bear: [] });
   test('scanner stored + activeTopic=scanner', () => { ok(CC.lastScanner); eq(CC.activeTopic, 'scanner'); });

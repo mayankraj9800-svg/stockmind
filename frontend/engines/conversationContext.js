@@ -112,6 +112,18 @@
       const capsTokens = (m.match(/\b[A-Z]{2,5}\b/g) || []).filter(t => !reservedCaps(t));
       const hasNewTicker = capsTokens.length > 0;
 
+      // ── RULE 1/2/3/5: EXPLICIT REQUESTS OUTRANK MEMORY ──────────────────────
+      // A new primary command (build/analyse/compare/scan/invest) must NEVER be
+      // answered from stored portfolio/stock memory. Memory may only resolve a
+      // *pure follow-up*. The one exception: a command that explicitly refers to
+      // the active book ("compare the two positions in THAT portfolio").
+      const buildCmd = (/\b(build|create|construct|design|put together)\b/i.test(m) && /\b(portfolio|allocation)\b/i.test(m))
+                       || (/\binvest\b/i.test(m) && /\bstocks?\b/i.test(m));
+      const otherCmd = /\b(analy[sz]e|compare|versus|\bvs\b|scan|screen|watchlist)\b/i.test(m);
+      const refsActivePortfolio = /\b(that|this|the|my)\s+(portfolio|holdings|positions|allocation)\b/i.test(m);
+      if (buildCmd) return { kind: 'none' };                       // building is always a fresh action
+      if (otherCmd && !refsActivePortfolio) return { kind: 'none' }; // analyse/compare outrank stale memory
+
       // Follow-ups resolve ONLY against the active topic — a stale portfolio or
       // comparison can never hijack a different subject.
 

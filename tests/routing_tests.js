@@ -26,6 +26,9 @@ module.exports = function run() {
   for (const q of ['analyse my portfolio', 'review my holdings', 'rebalance my portfolio', 'my positions overview'])
     test(`"${q}" → PORTFOLIO`, () => eq(mode(q), 'PORTFOLIO'));
   test('"build me a portfolio" → PORTFOLIO_BUILD (honest, no fake allocations)', () => eq(mode('build me a portfolio'), 'PORTFOLIO_BUILD'));
+  test('"invest in only three Indian stocks" (amount present) → PORTFOLIO_BUILD', () => eq(mode('You have 2000000 and can invest in only three Indian stocks for the next 10 years.'), 'PORTFOLIO_BUILD'));
+  test('"Build a banking portfolio" → PORTFOLIO_BUILD (fresh)', () => eq(mode('Build a 1000000 banking portfolio.'), 'PORTFOLIO_BUILD'));
+  test('"Analyze Reliance … outperform the Nifty 50" → SINGLE_STOCK (benchmark not index)', () => eq(mode('Analyze Reliance Industries and explain whether it can outperform the Nifty 50.'), 'SINGLE_STOCK'));
   test('"build a $100k portfolio using AAPL and MSFT" → PORTFOLIO_BUILD w/ named tickers', () => {
     const i = APP.classifyIntent('build a $100,000 portfolio using AAPL and MSFT');
     eq(i.mode, 'PORTFOLIO_BUILD'); ok(i.namedTickers.length >= 2);

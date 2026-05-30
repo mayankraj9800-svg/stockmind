@@ -4062,12 +4062,17 @@ Max 250 words. Only reference the positions and data listed above.`;
     // silently sending the user to the scanner.
     // Portfolio build: "build/create a portfolio", "diversify", or "invest $X".
     // Portfolio intent is checked BEFORE scanner so it always wins (Priority 2).
+    const _amountPresent = /(?:\$|₹|rs\.?|inr|usd)\s?[\d,]{3,}|\b[\d,]{4,}\b|\b\d+\s?(?:lakh|crore|k|million)\b/i.test(msg);
     const isBuildPort = !/\bmy\b/i.test(msg) && (
       (/\b(build|create|construct|make|design|put together|allocate)\b/i.test(msg) &&
        /\b(portfolio|allocation|allocations)\b/i.test(msg)) ||
       /\bdiversify\b/i.test(msg) ||
       /\b(invest|deploy|put)\s+(?:\$|₹|rs\.?|inr|usd)?\s?[\d,]{3,}(?:\s?(?:k|m|thousand|lakh|crore|million))?\b/i.test(msg) ||
-      /\b(retirement|dividend|growth|aggressive|conservative|balanced)\s+portfolio\b/i.test(msg)
+      /\b(retirement|dividend|growth|aggressive|conservative|balanced)\s+portfolio\b/i.test(msg) ||
+      // "You have ₹20,00,000 and can invest in only three Indian stocks…" /
+      // "pick 3 stocks for 10 years" — a fresh portfolio plan, not a follow-up.
+      (/\b(invest|allocate|deploy)\b/i.test(msg) && /\bstocks\b/i.test(msg) && _amountPresent) ||
+      (/\b(pick|choose|select)\b/i.test(msg) && /\bstocks\b/i.test(msg) && /\b(only\s+)?(one|two|three|four|five|\d+)\b/i.test(msg))
     );
     if (isBuildPort) {
       return { mode: 'PORTFOLIO_BUILD', namedTickers: this.extractTickers(msg, this._getNameMap()).slice(0, 8) };
@@ -4379,6 +4384,13 @@ RESPOND IN THIS EXACT FORMAT:
         return;
       }
 
+      // ── RESET PHRASES: "forget that / never mind / start over" wipe stale
+      // context so the rest of the message is treated fresh (Rule 4). ─────────
+      if (/\b(forget (that|it|this|everything|the (last|previous))|never ?mind|start over|scratch that|ignore (that|this|the previous|previous|everything)|reset (the )?(context|memory|chat))\b/i.test(msg)) {
+        if (window.ConversationContext) ConversationContext.clear();
+        if (this.memory && this.memory.clear) this.memory.clear();
+      }
+
       // Classify intent before any ticker extraction
       const intent = this.classifyIntent(msg);
 
@@ -4434,6 +4446,10 @@ RESPOND IN THIS EXACT FORMAT:
       const IR = window.IndexRouter;
       if (IR) {
         const route = IR.classify(msg);
+        // RULE 6: a benchmark mention ("...outperform the Nifty 50") must not
+        // replace the company being analysed. If a real (non-ETF) stock ticker
+        // is present, the index/ETF is just a reference — skip the index/ETF card.
+        const _realStock = this.extractTickers(msg, this._getNameMap()).filter(t => !IR.isETF(t));
         const card = (label, bodyHtml) => {
           thinkDiv.remove();
           const d = document.createElement('div'); d.className = 'msg ai';
@@ -4448,8 +4464,9 @@ RESPOND IN THIS EXACT FORMAT:
           card('📊 INDEX COMPARISON', `<table style="font-size:11px;border-collapse:collapse"><tr style="color:var(--tx3)"><td style="padding-right:10px">Index</td><td style="padding-right:10px">Region</td><td style="padding-right:10px">Proxy ETF</td><td>Coverage</td></tr>${rows}</table><br>These are <strong>market indices</strong>, compared by coverage/region — not company fundamentals. Invest via the tracking ETF (proxy) shown.`);
           return;
         }
-        // Single index ("how is the Nasdaq 100 doing")
-        if (route.kind === 'index' && intent.mode !== 'COMPARE') {
+        // Single index ("how is the Nasdaq 100 doing") — only when the index is
+        // the subject, NOT a benchmark mention alongside a company.
+        if (route.kind === 'index' && intent.mode !== 'COMPARE' && _realStock.length === 0) {
           const i = route.index;
           card(`📈 INDEX: ${this._escapeHtml(i.name)}`, `Region: <strong>${i.region}</strong> · Coverage: ${this._escapeHtml(i.desc)}<br>Investable proxy ETF: <strong>${i.proxyETF ? this._escapeHtml(i.proxyETF) : 'none listed (tracked descriptively)'}</strong>.<br><br>An index is not a company — ask me to analyse its proxy ETF${i.proxyETF ? ` (e.g. "analyse ${i.proxyETF}")` : ''} for holdings & risk.`);
           if (window.ConversationContext && i.proxyETF) ConversationContext.setETF(i.proxyETF);
@@ -4465,8 +4482,8 @@ RESPOND IN THIS EXACT FORMAT:
             return;
           }
         }
-        // Single ETF ("analyse SPY")
-        if (route.kind === 'etf' && intent.mode !== 'COMPARE') {
+        // Single ETF ("analyse SPY") — not when a company is the subject.
+        if (route.kind === 'etf' && intent.mode !== 'COMPARE' && _realStock.length === 0) {
           const e = route.etf;
           card(`📦 ETF: ${e.symbol} — ${this._escapeHtml(e.name)}`, `Tracks: <strong>${this._escapeHtml(e.tracks)}</strong><br>Expense ratio: <strong>${e.expenseRatio}%</strong> · Yield: <strong>${e.yield}%</strong> · Risk: <strong>${this._escapeHtml(e.risk)}</strong><br>Top sectors: ${e.topSectors.map(s => this._escapeHtml(s)).join(' · ')}<br><br>This is a <strong>fund</strong>, not a company — no single P/E, EPS or moat. It holds a diversified basket tracking ${this._escapeHtml(e.tracks)}.`);
           if (window.ConversationContext) ConversationContext.setETF(e.symbol);
@@ -4518,6 +4535,7 @@ RESPOND IN THIS EXACT FORMAT:
         });
         if (window.ConversationContext) {
           ConversationContext.setPortfolio(p);
+          ConversationContext.lastDecision = null; // fresh build → no stale prior decision (Rule 4)
           ConversationContext.setObjective(themes.length ? themes.join(' / ') : p.type); // remember the objective for "why" questions
         }
         let bodyHtml = this._renderPortfolio(p, 'Suggested ' + p.type + ' portfolio');
