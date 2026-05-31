@@ -34,7 +34,7 @@ module.exports = function run() {
   ];
   const p = APP.buildComparePromptV2(stocks, 'which has a stronger moat?');
   test('prompt includes the user question', () => ok(p.includes('stronger moat')));
-  test('prompt instructs not to introduce other companies', () => ok(/do NOT introduce any other company/i.test(p)));
+  test('prompt constrains to the named companies only', () => ok(/only discuss/i.test(p)));
   test('prompt names both AAPL and MSFT', () => ok(p.includes('AAPL') && p.includes('MSFT')));
   test('prompt without question still valid (standard compare)', () => {
     const p2 = APP.buildComparePromptV2(stocks);

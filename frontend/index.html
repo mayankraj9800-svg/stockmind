@@ -4093,12 +4093,16 @@ Max 250 words. Only reference the positions and data listed above.`;
     // ── COMPARE: explicit comparison with real tickers OR company names ──
     // BUG FIX: previously required an UPPERCASE ticker, so "compare nvidia and
     // amd" (lowercase names) misrouted to SINGLE_STOCK. Also resolve names.
-    if (/\b(compare|vs\.?|versus)\b/i.test(msg)) {
+    if (/\b(compare|vs\.?|versus)\b/i.test(msg) || /\boutperform/i.test(msg) || /\brank (all |these |them|the )/i.test(msg)) {
       const named = this.extractTickers(msg, this._getNameMap());
-      // ≥2 entities = direct compare; OR 1 entity + an active single stock =
-      // "analyse Tata Motors" → "compare to Mahindra" (the active stock is the
-      // other side, injected in the COMPARE handler).
-      if (hasRealTicker || named.length >= 2 || (named.length >= 1 && this.memory.activeTicker))
+      const companyCount = new Set(named).size; // resolved COMPANY tickers (indices aren't tickers)
+      // "X vs <index>" (Reliance/TCS/HDFC vs Nifty 50) is a single-stock-vs-
+      // benchmark question — analyse the one company (qualitatively addressing
+      // the benchmark), NOT a 2-company compare that dead-ends on one ticker.
+      const benchmark = /\b(nifty(\s*50|\s*next\s*50|\s*bank)?|sensex|bank\s*nifty|s\s*&\s*p|s\s+and\s+p|sp\s*500|s&p\s*500|nasdaq(\s*100)?|dow(\s*jones)?|the\s+(index|market)|an?\s+index)\b/i.test(msg);
+      if (companyCount >= 2) return { mode: 'COMPARE' };
+      if (companyCount === 1 && benchmark) { /* fall through → SINGLE_STOCK vs benchmark */ }
+      else if (hasRealTicker || (companyCount >= 1 && this.memory.activeTicker))
         return { mode: 'COMPARE' };
     }
 
@@ -4215,7 +4219,7 @@ T1: [first target price] | T2: [second target price] | R/R: [ratio]
 
     const symbols = stocks.map(s => s.symbol);
     const focusLine = userQuestion && userQuestion.trim()
-      ? `\nUSER'S SPECIFIC QUESTION: "${userQuestion.trim()}" — answer it directly in the RELATIVE VERDICT, comparing ${symbols.join(' and ')} only. Do NOT introduce any other company.\n`
+      ? `\nUSER'S SPECIFIC QUESTION: "${userQuestion.trim()}"\nAnswer this question directly and fully, covering EVERY sub-part the user asked (e.g. ranking, per-company moat/risk/recession, benchmark probability). Only discuss ${symbols.join(', ')} (a market index may be referenced as a benchmark). If a numeric field is N/A, reason QUALITATIVELY and still answer — never reply "insufficient data". The RELATIVE VERDICT must contain the explicit ranking/answer.\n`
       : '';
     return `You are StockMind AI — institutional equity research analyst. Compare ${symbols.join(' vs ')} using ONLY the verified live data below. Write like an institutional research note, not two separate analyses.
 ${focusLine}
@@ -4243,7 +4247,7 @@ RESPOND IN THIS EXACT FORMAT:
 [Which stock suits which investor profile — long-term vs momentum vs value]
 
 🏆 RELATIVE VERDICT
-[Clear winner for today's data with specific reasoning — state one as strongest setup]
+[Clear winner with reasoning. If valuation/growth numbers are N/A for a stock, do NOT skip it or stop — compare qualitatively (business model, competitive moat, sector position, scale, diversification) and still name a winner with reduced confidence. Never invent numbers and never reply only "insufficient data".]
 
 ⚠ Live data analysis only. Not financial advice. Max 280 words.`;
   },
@@ -4730,7 +4734,7 @@ RESPOND IN THIS EXACT FORMAT:
             return;
           }
 
-          const cmpPrompt = this.buildComparePromptV2(stocksData, intent.followUp ? msg : '');
+          const cmpPrompt = this.buildComparePromptV2(stocksData, msg);
           setThinkText('Running institutional comparison…');
           const result = await this.callGroqAI(cmpPrompt);
           if (thinkDiv.isConnected) thinkDiv.remove();
@@ -6153,11 +6157,15 @@ Do NOT guess any prices, metrics, or financial data. Keep response under 50 word
     const peg   = metrics?.pegRatio  || null;
     const egr   = metrics?.epsGrowth || metrics?.earningsGrowth || null;
 
-    // Determine what verdict is possible
+    // Determine what KIND of verdict is possible. Missing fundamentals must
+    // DOWNGRADE confidence — never disable reasoning. With full metrics, give a
+    // quantitative BUY/HOLD/SELL; without, give a QUALIFIED qualitative view
+    // grounded in business model / moat / sector / market context (no invented
+    // numbers).
     const hasEnoughForVerdict = quote?.c && metrics?.peTTM && metrics?.revenueGrowthTTMYoy;
     const verdictRule = hasEnoughForVerdict
-      ? 'Provide a BUY / HOLD / SELL verdict with concise reasoning.'
-      : 'DO NOT provide a BUY/HOLD/SELL verdict — insufficient verified metrics. State this explicitly.';
+      ? 'Provide a BUY / HOLD / SELL verdict with concise reasoning grounded in the verified metrics above.'
+      : 'Provide a QUALIFIED long-term view — Favourable / Neutral / Cautious — reasoned from the business model, sector position, competitive moat, diversification, historical growth drivers, and the live price/technicals/market context above. State clearly that detailed fundamentals (P/E, EPS, revenue growth) were unavailable so confidence is reduced. Do NOT invent any specific ratios or figures, but DO still answer the question.';
 
     // Build technicals line with MACD
     const techLine = [
@@ -6182,13 +6190,16 @@ Do NOT guess any prices, metrics, or financial data. Keep response under 50 word
       const parts = Object.entries(validated).map(([label, val]) => `${label}=${Number(val).toFixed(2)}`);
       valuationLine = parts.join(' | ') + (targetStr ? ` | ${targetStr}` : '');
     } else {
-      valuationLine = 'VALUATION: No verified fundamentals available — do not fabricate, estimate, or infer any ratios.';
+      valuationLine = 'VALUATION: No verified fundamental ratios available — assess valuation/quality QUALITATIVELY from the business model, market position and sector; do not state specific P/E, EPS or revenue figures.';
     }
     if (missing.length) {
-      blockedDirective = `\n⛔ UNAVAILABLE FUNDAMENTALS (DO NOT mention, estimate, infer, or discuss these — say "not available" if asked): ${missing.join(', ')}`;
+      // Anti-hallucination: never invent NUMBERS for these. But qualitative
+      // reasoning about them (e.g. "margins are structurally high in this
+      // sector") is allowed — missing data downgrades confidence, not reasoning.
+      blockedDirective = `\nNO VERIFIED NUMBERS for: ${missing.join(', ')} — never state a specific value for these; you MAY reason about them qualitatively.`;
     }
     if (!canFund) {
-      blockedDirective += `\n⛔ INSUFFICIENT VERIFIED FUNDAMENTALS — this is a PRICE/TECHNICAL-ONLY analysis. Do NOT give a fundamental BUY/SELL verdict; explicitly state fundamentals were unavailable for ${symbol}.`;
+      blockedDirective += `\nFUNDAMENTALS UNAVAILABLE for ${symbol}: do NOT refuse or stop. Deliver a QUALITATIVE long-term analysis (business model, sector leadership, competitive moat, diversification, historical drivers, macro/market context) and reach a QUALIFIED conclusion. Lower the confidence score and clearly disclose that P/E, EPS and revenue data were unavailable. Never fabricate specific figures.`;
     }
 
     // Swing trading mode — use isolated swing prompt, not generic analysis.
@@ -6243,8 +6254,8 @@ REQUIRED RESPONSE FORMAT (use exactly):
 📊 SUMMARY
 [2 sentences: what is this company and what does today's data tell us]
 
-📈 VALUATION
-[P/E vs forward P/E, PEG context, growth rate, analyst target — only if metrics available; else state "Insufficient verified data"]
+📈 VALUATION & BUSINESS
+[If metrics available: P/E vs forward P/E, PEG, growth, analyst target. If NOT available: say the numeric ratios are unavailable, then assess valuation/quality QUALITATIVELY — business model, market/sector position, competitive moat, diversification, scale, historical growth drivers.]
 
 ⚡ TECHNICALS
 [52W position, RSI reading, MACD signal, MA50/MA200 structure — use the data above; note if candle-based or intraday-only]
@@ -6265,10 +6276,10 @@ ${verdictRule}
 ═══════════════════════════════════════
 
 DATA RULES (non-negotiable):
-- Only use data in this prompt. Never invent, estimate, derive, infer, approximate, or recall training data for prices/metrics.
-- NEVER mention or estimate any metric listed under "UNAVAILABLE FUNDAMENTALS". If asked about one, reply exactly that it was not available.
-- If a section's data is N/A, write "Insufficient verified data for this section."
-- Comparative analysis requires verified data for ALL compared entities.
+- Never invent, estimate, or state a specific NUMBER (price/ratio/metric) that is not in this prompt. No made-up P/E, EPS, revenue, target, etc.
+- For any metric under "NO VERIFIED NUMBERS": never give a figure, but you MAY reason about it qualitatively.
+- Missing fundamentals must NOT stop the analysis. When numeric data is absent, reason QUALITATIVELY (business model, moat, sector, diversification, macro) and reach a QUALIFIED conclusion with reduced confidence — do not reply only "insufficient data".
+- Comparative/benchmark questions (e.g. vs an index): answer qualitatively using known business/sector characteristics; do not fabricate index return numbers.
 - Max 280 words total.
 
 USER QUERY: ${userMessage}`;
